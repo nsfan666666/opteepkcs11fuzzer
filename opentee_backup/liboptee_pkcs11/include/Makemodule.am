@@ -1,0 +1,7 @@
+# Public header files
+
+include_HEADERS += \
+	include/ck_debug.h \
+	include/pkcs11.h \
+	include/pkcs11_ta.h 
+

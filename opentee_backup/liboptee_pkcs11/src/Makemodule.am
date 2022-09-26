@@ -1,0 +1,37 @@
+# liboptee shared library
+
+lib_LTLIBRARIES += liboptee_pkcs11.la
+
+liboptee_pkcs11_la_includes =
+#	../liboptee_pkcs11/src/invoke_ta.h 
+#	include/pkcs11.h 
+#	ck_debug.h 
+#	src/ck_helpers.h 
+#	src/invoke_ta.h 
+#	src/local_utils.h 
+#	src/pkcs11_processing.h 
+#	src/pkcs11_token.h 
+#	src/serialize_ck.h 
+#	src/serializer.h
+
+# Target specific variables
+liboptee_pkcs11_la_SOURCES = ${liboptee_pkcs11_la_includes} \
+	src/invoke_ta.c \
+	src/pkcs11_api.c \
+	src/pkcs11_processing.c \
+	src/pkcs11_token.c \
+	src/serialize_ck.c \
+	src/serializer.c
+#	src/ck_debug.c
+#	src/ck_helpers.c
+
+liboptee_pkcs11_la_CFLAGS = ${AM_CFLAGS} \
+	-iquote $(top_srcdir)/include \
+	-iquote $(top_srcdir)/src \
+	-iquote $(top_srcdir)/../libtee/include 
+
+liboptee_pkcs11_la_LDFLAGS = ${AM_LDFLAGS} \
+	-version-info 0:0:0 
+
+liboptee_pkcs11_la_LIBADD = ../libtee/libtee.la
+

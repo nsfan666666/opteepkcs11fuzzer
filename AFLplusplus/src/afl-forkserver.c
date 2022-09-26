@@ -383,17 +383,6 @@ static void report_error_and_exit(int error) {
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
 // ! Private function used to execute the engine code 
 
 void start_engine(char *bin_name) 
@@ -407,9 +396,8 @@ void start_engine(char *bin_name)
 		exit(EXIT_FAILURE);
 	} 
 
-  // ACTF("cwd=%s", engine_path);
   strcat(engine_path, "/../project/opentee");
-  // ACTF("engine_path=%s", engine_path);
+  ACTF("engine_path=%s", engine_path);
 	// engine_path = "/opt/OpenTee/bin/opentee-engine";
 
 
@@ -426,67 +414,10 @@ void start_engine(char *bin_name)
     NULL
   };
 
-  // if (getenv("AFL"))
-  //   snprintf(env_afl, PATH_MAX, "AFL=%s", getenv("AFL"));
-  // else
-  //   memset(env_afl, '\0', PATH_MAX);
-
-  // if (getenv("HOME"))
-  //   snprintf(env_home, PATH_MAX, "HOME=%s", getenv("HOME"));
-  // else
-  //   memset(env_home, '\0', PATH_MAX);
-
-  // // if (getenv("AFL_PRELOAD"))
-  // //   snprintf(env_afl_preload, PATH_MAX, "LD_PRELOAD=%s", getenv("AFL_PRELOAD"));
-  // // else
-  // //   memset(env_afl_preload, '\0', PATH_MAX);
-
-  // if (getenv("OPENTEE_SOCKET_FILE_PATH"))
-  //   snprintf(env_opentee_socket_file_path, PATH_MAX, "OPENTEE_SOCKET_FILE_PATH=%s", getenv("OPENTEE_SOCKET_FILE_PATH"));
-  // else
-  //   memset(env_opentee_socket_file_path, '\0', PATH_MAX);
-
-  // if (getenv("OPENTEE_STORAGE_PATH"))
-  //   snprintf(env_opentee_storage_path, PATH_MAX, "OPENTEE_STORAGE_PATH=%s", getenv("OPENTEE_STORAGE_PATH"));
-  // else
-  //   memset(env_opentee_storage_path, '\0', PATH_MAX);
-
-  // if (getenv("CKTEEC_LOGIN_TYPE"))
-  //   snprintf(env_ckteec_login_type, PATH_MAX, "CKTEEC_LOGIN_TYPE=%s", getenv("CKTEEC_LOGIN_TYPE"));
-  // else
-  //   memset(env_ckteec_login_type, '\0', PATH_MAX);
-
-  // if (getenv("CKTEEC_LOGIN_GID"))
-  //   snprintf(env_ckteec_login_gid, PATH_MAX, "CKTEEC_LOGIN_GID=%s", getenv("CKTEEC_LOGIN_GID"));
-  // else
-  //   memset(env_ckteec_login_gid, '\0', PATH_MAX);  
-
-  // char *envp[] = {
-  //   env_afl,
-  //   env_home,
-  //   // env_afl_preload,
-  //   NULL
-  // };
-    
- 
-
-  // ACTF("[AFL_PRELOAD]: %s", env_afl_preload);
-
-  
-
-  // ACTF("argv1=%s", argv1);
-
-  // ACTF("env_afl=%s env_home=%s env_opentee_socket_file_path=%s env_opentee_storage_path=%s env_ckteec_login_type=%s env_ckteec_login_gid=%s ", env_afl, env_home, env_opentee_socket_file_path, env_opentee_storage_path, env_ckteec_login_type, env_ckteec_login_gid);
-
-
   signal(SIGCHLD, NULL); // reset engine not to ignore SIGCHILD
 
-	// * Like execv, but avoid the trouble of setting up an array. Instead, will store the function arguments in a temporary array. Can also pass environment variables.
-	// execvpe(engine_path, argv, envp); 
-  execv(engine_path, argv);
-  // execl(engine_path, "opentee", "restart", NULL);
-	// const char *args = {"start", "-f", (char*)NULL};
-	// execl(engine_path, "start", "-f", (char*)NULL); 
+  execv(engine_path, argv); // execv passes the environ variable
+
   ACTF("exec failed, %s\n", strerror(errno));
 
 }

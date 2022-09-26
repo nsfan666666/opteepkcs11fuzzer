@@ -1,0 +1,112 @@
+internal_api/libStorageTest_la-storage_test.lo: \
+ ../../tests/internal_api/storage_test.c /usr/include/stdc-predef.h \
+ ../../tests/internal_api/storage_test.h \
+ ../../tests/../emulator/include/tee_internal_api.h \
+ ../../tests/../emulator/include/../internal_api/tee_data_types.h \
+ /usr/lib/gcc/x86_64-linux-gnu/8/include/stddef.h \
+ /usr/lib/gcc/x86_64-linux-gnu/8/include/stdint.h /usr/include/stdint.h \
+ /usr/include/x86_64-linux-gnu/bits/libc-header-start.h \
+ /usr/include/features.h /usr/include/x86_64-linux-gnu/sys/cdefs.h \
+ /usr/include/x86_64-linux-gnu/bits/wordsize.h \
+ /usr/include/x86_64-linux-gnu/bits/long-double.h \
+ /usr/include/x86_64-linux-gnu/gnu/stubs.h \
+ /usr/include/x86_64-linux-gnu/gnu/stubs-64.h \
+ /usr/include/x86_64-linux-gnu/bits/types.h \
+ /usr/include/x86_64-linux-gnu/bits/typesizes.h \
+ /usr/include/x86_64-linux-gnu/bits/wchar.h \
+ /usr/include/x86_64-linux-gnu/bits/stdint-intn.h \
+ /usr/include/x86_64-linux-gnu/bits/stdint-uintn.h \
+ /usr/lib/gcc/x86_64-linux-gnu/8/include/stdbool.h \
+ ../../tests/../emulator/include/../internal_api/../include/tee_shared_data_types.h \
+ ../../tests/../emulator/include/../internal_api/tee_memory.h \
+ ../../tests/../emulator/include/../internal_api/tee_data_types.h \
+ ../../tests/../emulator/include/../internal_api/tee_ta_interface.h \
+ ../../tests/../emulator/include/../internal_api/tee_time_api.h \
+ ../../tests/../emulator/include/../internal_api/tee_storage_api.h \
+ ../../tests/../emulator/include/../internal_api/tee_panic.h \
+ ../../tests/../emulator/include/../internal_api/tee_crypto_api.h \
+ ../../tests/../emulator/include/../internal_api/tee_storage_api.h \
+ ../../tests/../emulator/include/../internal_api/tee_bigint.h \
+ ../../tests/../emulator/include/../internal_api/tee_internal_client_api.h \
+ ../../tests/../emulator/include/../internal_api/tee_cancellation.h \
+ ../../tests/internal_api/print_functions.h \
+ ../../tests/../emulator/include/tee_logging.h /usr/include/syslog.h \
+ /usr/include/x86_64-linux-gnu/sys/syslog.h \
+ /usr/lib/gcc/x86_64-linux-gnu/8/include/stdarg.h \
+ /usr/include/x86_64-linux-gnu/bits/syslog-path.h
+
+/usr/include/stdc-predef.h:
+
+../../tests/internal_api/storage_test.h:
+
+../../tests/../emulator/include/tee_internal_api.h:
+
+../../tests/../emulator/include/../internal_api/tee_data_types.h:
+
+/usr/lib/gcc/x86_64-linux-gnu/8/include/stddef.h:
+
+/usr/lib/gcc/x86_64-linux-gnu/8/include/stdint.h:
+
+/usr/include/stdint.h:
+
+/usr/include/x86_64-linux-gnu/bits/libc-header-start.h:
+
+/usr/include/features.h:
+
+/usr/include/x86_64-linux-gnu/sys/cdefs.h:
+
+/usr/include/x86_64-linux-gnu/bits/wordsize.h:
+
+/usr/include/x86_64-linux-gnu/bits/long-double.h:
+
+/usr/include/x86_64-linux-gnu/gnu/stubs.h:
+
+/usr/include/x86_64-linux-gnu/gnu/stubs-64.h:
+
+/usr/include/x86_64-linux-gnu/bits/types.h:
+
+/usr/include/x86_64-linux-gnu/bits/typesizes.h:
+
+/usr/include/x86_64-linux-gnu/bits/wchar.h:
+
+/usr/include/x86_64-linux-gnu/bits/stdint-intn.h:
+
+/usr/include/x86_64-linux-gnu/bits/stdint-uintn.h:
+
+/usr/lib/gcc/x86_64-linux-gnu/8/include/stdbool.h:
+
+../../tests/../emulator/include/../internal_api/../include/tee_shared_data_types.h:
+
+../../tests/../emulator/include/../internal_api/tee_memory.h:
+
+../../tests/../emulator/include/../internal_api/tee_data_types.h:
+
+../../tests/../emulator/include/../internal_api/tee_ta_interface.h:
+
+../../tests/../emulator/include/../internal_api/tee_time_api.h:
+
+../../tests/../emulator/include/../internal_api/tee_storage_api.h:
+
+../../tests/../emulator/include/../internal_api/tee_panic.h:
+
+../../tests/../emulator/include/../internal_api/tee_crypto_api.h:
+
+../../tests/../emulator/include/../internal_api/tee_storage_api.h:
+
+../../tests/../emulator/include/../internal_api/tee_bigint.h:
+
+../../tests/../emulator/include/../internal_api/tee_internal_client_api.h:
+
+../../tests/../emulator/include/../internal_api/tee_cancellation.h:
+
+../../tests/internal_api/print_functions.h:
+
+../../tests/../emulator/include/tee_logging.h:
+
+/usr/include/syslog.h:
+
+/usr/include/x86_64-linux-gnu/sys/syslog.h:
+
+/usr/lib/gcc/x86_64-linux-gnu/8/include/stdarg.h:
+
+/usr/include/x86_64-linux-gnu/bits/syslog-path.h:

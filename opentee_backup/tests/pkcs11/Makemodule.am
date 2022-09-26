@@ -1,0 +1,37 @@
+# pkcs11_test executable
+
+CC = afl-gcc-fast
+
+#check_PROGRAMS += pkcs11_test
+bin_PROGRAMS += pkcs11_test
+
+pkcs11_test_includes = 
+#	../emulator/include/tee_internal_api.h 
+#	../emulator/include/tee_logging.h 
+#	pkcs11/adbg/include/adbg.h
+
+pkcs11_test_SOURCES = ${pkcs11_test_includes} \
+	pkcs11/pkcs11_test_app.c 
+#	pkcs11/adbg/src/adbg_case.c 
+#	pkcs11/adbg/src/adbg_enum.c 
+#	pkcs11/adbg/src/adbg_expect.c 
+#	pkcs11/adbg/src/adbg_int.h 
+#	pkcs11/adbg/src/adbg_log.c 
+#	pkcs11/adbg/src/adbg_run.c 
+#	pkcs11/adbg/src/security_utils_hex.c 
+#	pkcs11/adbg/src/security_utils_hex.h
+
+pkcs11_test_CFLAGS = ${AM_CFLAGS} \
+	-iquote $(top_srcdir)/../emulator/include \
+	-I$(top_srcdir)/../libtee/include \
+	-I$(top_srcdir)/../liboptee_pkcs11/include \
+	-I$(top_srcdir)/../liboptee_pkcs11/src \
+	-I$(top_srcdir)/pkcs11/adbg/include \
+	--coverage
+
+pkcs11_test_LDFLAGS = ${AM_LDFLAGS} \
+	-lpthread
+
+pkcs11_test_LDADD = \
+	../libtee/libtee.la \
+	../liboptee_pkcs11/liboptee_pkcs11.la
