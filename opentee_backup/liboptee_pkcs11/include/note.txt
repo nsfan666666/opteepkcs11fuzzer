@@ -1,1 +1,0 @@
-pkcs11_ta.h is a Linux hardlink to TAs/optee_pkcs11_ta/include/pkcs11_ta.h

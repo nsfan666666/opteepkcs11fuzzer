@@ -1,6 +1,0 @@
-common/libCommonApi_la-tee_list.lo: ../../emulator/common/tee_list.c \
- /usr/include/stdc-predef.h ../../emulator/include/tee_list.h
-
-/usr/include/stdc-predef.h:
-
-../../emulator/include/tee_list.h:
