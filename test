@@ -1,6 +1,0 @@
-[PATHS]
-ta_dir_path = /opt/OpenTee/lib/TAs
-core_lib_path = /opt/OpenTee/lib
-opentee_bin = /opt/OpenTee/bin/opentee-engine
-subprocess_manager = libManagerApi.so
-subprocess_launcher = libLauncherApi.so
