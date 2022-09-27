@@ -48,6 +48,22 @@ m4/lt~obsolete.m4
 # (which is called by configure script))
 Makefile
 
+
+# VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+
+# Local History for Visual Studio Code
+.history/
+
+# Built Visual Studio Code Extensions
+*.vsix
+
+
 # Build & out directory
-/build
-/out
+/build/**
+/out/**
