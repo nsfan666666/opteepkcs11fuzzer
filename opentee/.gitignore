@@ -49,14 +49,6 @@ m4/lt~obsolete.m4
 Makefile
 
 
-# VSCode
-.vscode/
-# Local History for Visual Studio Code
-.history/
-# Built Visual Studio Code Extensions
-*.vsix
-
-
 # Build & out directory
 /build/**
 /out/**
