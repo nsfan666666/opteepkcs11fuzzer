@@ -25,7 +25,6 @@
 #include <stddef.h> /*offsetof*/
 #include <stdlib.h>
 
-#include <semaphore.h>
 #include <fcntl.h>
 #include <stdio.h> // for perror message in strerror(errno)
 

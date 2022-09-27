@@ -45,7 +45,6 @@
 #include <stdint.h>
 #include <sys/types.h>
 #include <sys/uio.h>
-#include <semaphore.h>
 
 #include "tee_shared_data_types.h"
 

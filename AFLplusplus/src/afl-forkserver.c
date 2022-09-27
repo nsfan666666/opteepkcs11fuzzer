@@ -52,7 +52,6 @@
 #include <sched.h> // clone
 #include <linux/sched.h>    /* Definition of struct clone_args */
 #include <sys/syscall.h>    /* Definition of SYS_* constants */
-#include <semaphore.h>
 #include <alloca.h> // * alloca (allocate stack memory)
 #include <linux/limits.h> // * PATH_MAX
 #include <dirent.h> // * DIR
@@ -436,7 +435,7 @@ void spawn_engine(s32 *ta_st_pipe_fd)
   signal(SIGCHLD, SIG_IGN); // client ignore SIGCHILD in order to avoid leaving engine in zombie state (defunct process)
   clone(start_engine, stack_top, SIGCHLD, NULL); // spawns a new thread/process (engine) 
   
-  // usleep(100000); // delay for engine to start up before
+  usleep(100000); // delay for engine to start up before
   // usleep(200000);
 
   // ! opening TA FIFO

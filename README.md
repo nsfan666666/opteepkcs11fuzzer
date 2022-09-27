@@ -1,4 +1,4 @@
-# Usage Guide
+# Usage Guide for Debian GNU/Linux 10 (buster)
 
 ## Build Instructions
 
@@ -81,10 +81,15 @@ Use the following command to initiate a fuzzing session with AFL:
 
 ```bash
 cd <opentee>/build # uses cwd atm to find engine
-AFL=1 afl-fuzz -T PKCS11 -t <timeout_ms> -i <corpus_entries> -o <opentee>/out -- /opt/OpenTee/bin/pkcs11_test
+AFL=1 afl-fuzz -T PKCS11 -D -t <timeout_ms> -i <corpus_entries> -o <opentee>/out -- /opt/OpenTee/bin/pkcs11_test
 ```
 
 Stop the fuzzing session with <CTRL>+<C> and continue an old session using by replacing the `<corpus_entries>` with `-` in the above command.
+
+To test if ASAN is functioning, run the above fuzzing command with the flag ```BUG=1```. If AFL catches the crash and ASAN crash log files are generated in ```/tmp/log/asan``` then it's working. This flag is only used for testing purpose.
+
+**Note:** If a message stating "cannot find PID file", then run the engine standalone one time before fuzzing it. Follow the instructions in "Test run PKCS#11 TA" section.
+
 
 ### View Generated Coverage Information
 
@@ -103,6 +108,7 @@ This will generate an index.html file which can be viewed on a browser.
 **Note:** Cannot run afl-cov command with --live since the code there assumes AFL=1 is unset, contradicting the real fuzzing process in run.
 
 
+
 ## Debug
 
 ### Utilities
@@ -116,6 +122,12 @@ pstree -hp | egrep "tee_launcher|tee_manager|opentee-engine|pkcs11_test"
 
 # Kill all processes started by afl
 sudo killall -s KILL tee_manager tee_launcher pkcs11_test engine afl-fuzz opentee-engine
+
+# View TA output in syslog (enable rsyslog or similar services)
+sudo tail -f /var/log/syslog # pipe into "bat --paging=never -l log" for prettier output 
+
+# Disable log service when performing long fuzzing sessions to avoid using up the disk
+service rsyslog stop
 
 # Debug the TA using GDB
 sudo -E gdb -ex "set follow-fork-mode child" opentee-engine $(pidof tee_launcher)

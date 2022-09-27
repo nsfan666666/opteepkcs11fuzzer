@@ -8,20 +8,17 @@
 #include <limits.h> // for PATH_MAX
 #include <sys/types.h> // pid_t
 #include <unistd.h> // for STDIN_FILENO, fork, clone...
-// #include <signal.h> // SIGCHLD
 #include <errno.h>
-// #include <semaphore.h>
 #include <fcntl.h>
 
 #include <pthread.h> // PTHREAD_MUTEX_INITIALIZER
 #include <stdbool.h> // bool
 #include <string.h> // memmem
-// #include <sys/mman.h> // mmap constants
 
 #include "invoke_ta.h" // CKTEEC_SHM_INOUT, ckteec_alloc_shm
 #include "tee_client_api.h" // TEEC_XXX, CK_XXX
-// #include "local_utils.h" // ARRAY_SIZE
 #include "pkcs11_ta.h" // libdump
+//// #include "local_utils.h" // ARRAY_SIZE
 
 #ifndef __AFL_FUZZ_TESTCASE_LEN
   ssize_t fuzz_len;

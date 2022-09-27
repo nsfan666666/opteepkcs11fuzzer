@@ -289,6 +289,7 @@ out:
 // ! Set ASAN abort_on_error=1 to recieve correct TA si_code (status) and use custom SIGABRT handler to ignore the signal to avoid aborting engine.
 
 const char *__asan_default_options() {
+
 	return "abort_on_error=1:"
 			"detect_leaks=0:"
 			"malloc_context_size=0:"
@@ -300,7 +301,8 @@ const char *__asan_default_options() {
 			"handle_abort=1:"
 			"handle_sigfpe=0:"
 			"handle_sigill=0:"
-			"log_path=/home/sekai/log/asan/asan";
+			"log_path=/tmp/log/asan/asan";
+
 }
 
 int main(int argc, char **argv)
@@ -366,7 +368,20 @@ int main(int argc, char **argv)
 	control_params.fn_cleanup_core = cleanup_core;
 #endif
 
+	struct stat st = {0};
+
 	if ((getenv("AFL"))) {
+
+		// ! Create asan log directory if doesn't exist already
+
+		if (stat("/tmp/log", &st) == -1) {
+			mkdir("/tmp/log", 0700);
+
+			if (stat("/tmp/log/asan", &st) == -1) 
+				mkdir("/tmp/log/asan", 0700);
+		}
+		
+		// ! Open TA pipe
 
 		if ((ta_st_fd = open(TA_ST_PIPE_PATH, O_WRONLY)) < 0) { // * open in read only refering the FIFO by the first available fd
 			OT_LOG(LOG_ERR, "KZ: Failed to open TA FIFO: %s", strerror(errno));
