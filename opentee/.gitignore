@@ -50,5 +50,5 @@ Makefile
 
 
 # Build & out directory
-/build/**
-/out/**
+/build/*
+/out/*
