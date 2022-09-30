@@ -1,6 +1,6 @@
 # libLauncherApi shared library
 
-export AFL_USE_ASAN=1
+#export AFL_USE_ASAN=1
 CC = afl-gcc-fast
 
 lib_LTLIBRARIES += libLauncherApi.la

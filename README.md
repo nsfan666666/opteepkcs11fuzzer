@@ -81,7 +81,7 @@ Use the following command to initiate a fuzzing session with AFL:
 
 ```bash
 cd <opentee>/build # uses cwd atm to find engine
-AFL=1 afl-fuzz -T PKCS11 -D -t <timeout_ms> -i <corpus_entries> -o <opentee>/out -- /opt/OpenTee/bin/pkcs11_test
+AFL=1 AFL_PRELOAD=$(gcc -print-file-name=libasan.so) afl-fuzz -T PKCS11 -D -t <timeout_ms> -i <corpus_entries> -o <opentee>/out -- /opt/OpenTee/bin/pkcs11_test
 ```
 
 Stop the fuzzing session with <CTRL>+<C> and continue an old session using by replacing the `<corpus_entries>` with `-` in the above command.
