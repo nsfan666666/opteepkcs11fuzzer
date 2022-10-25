@@ -228,8 +228,7 @@ void TEE_CopyObjectAttributes1(TEE_ObjectHandle destObject, TEE_ObjectHandle src
  * \param paramCount
  * \return
  */
-TEE_Result TEE_GenerateKey(TEE_ObjectHandle object, uint32_t keySize, TEE_Attribute *params,
-			   uint32_t paramCount);
+TEE_Result TEE_GenerateKey(TEE_ObjectHandle object, uint32_t keySize, TEE_Attribute *params, uint32_t paramCount);
 
 /*
  * ## Persistent Object Functions ##
@@ -262,6 +261,7 @@ TEE_Result TEE_OpenPersistentObject(uint32_t storageID,
  * \param object
  * \return
  */
+// !
 TEE_Result TEE_CreatePersistentObject(uint32_t storageID,
 				      void *objectID,
 				      size_t objectIDLen,
@@ -345,6 +345,10 @@ TEE_Result TEE_GetNextPersistentObject(TEE_ObjectEnumHandle objectEnumerator,
  * \param count
  * \return
  */
+// ! kz: GP 1.2 (OP-TEE) TEE_ReadObjectData(TEE_ObjectHandle, void *, size_t, size_t *) vs GP 1.3 (Open-TEE) GP 1.2 TEE_ReadObjectData(TEE_ObjectHandle, void *, size_t, uint32_t *)
+// ? kz: size_t is 64-bit long on 64-bit system = incompatability --> patch Open-TEE after OP-TEE
+// ? example of problem: SEGV occurs when init_persistent_db in persistent_token.c (OP-TEE) calls TEE_ReadObjectData in data_stream_api.c in (Open-TEE)
+
 TEE_Result TEE_ReadObjectData(TEE_ObjectHandle object,
 			      void *buffer,
 			      size_t size,
@@ -367,6 +371,7 @@ TEE_Result TEE_WriteObjectData(TEE_ObjectHandle object,
  * \param size
  * \return
  */
+// !
 TEE_Result TEE_TruncateObjectData(TEE_ObjectHandle object, size_t size);
 
 /*!

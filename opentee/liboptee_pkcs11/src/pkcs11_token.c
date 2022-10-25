@@ -3,11 +3,12 @@
  * Copyright (c) 2017-2020, Linaro Limited
  */
 
+#include <ck_debug.h>
+#include <pkcs11.h>
+#include <pkcs11_ta.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "pkcs11.h"
-#include "ck_debug.h"
 #include "ck_helpers.h"
 #include "invoke_ta.h"
 #include "local_utils.h"
@@ -82,7 +83,6 @@ CK_RV ck_slot_get_list(CK_BBOOL present,
 		client_count = *count;
 
 	size = client_count * sizeof(*slot_ids);
-
 	shm = ckteec_alloc_shm(size, CKTEEC_SHM_OUT);
 	if (!shm)
 		return CKR_HOST_MEMORY;

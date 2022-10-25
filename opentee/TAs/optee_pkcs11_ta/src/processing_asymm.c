@@ -4,18 +4,16 @@
  */
 
 #include <assert.h>
-//#include <compiler.h>
-#include "tee_api_defines.h"
-#include "tee_internal_api.h" // opentee
-#include "tee_internal_api_extensions.h"
+#include <compiler.h>
+#include <tee_api_defines.h>
+#include <tee_internal_api.h>
+#include <tee_internal_api_extensions.h>
 
 #include "attributes.h"
 #include "pkcs11_helpers.h"
 #include "pkcs11_token.h"
 #include "processing.h"
 #include "serializer.h"
-
-#include "tee_logging.h"
 
 bool processing_is_tee_asymm(uint32_t proc_id)
 {
@@ -36,7 +34,9 @@ bool processing_is_tee_asymm(uint32_t proc_id)
 	case PKCS11_CKM_SHA384_RSA_PKCS_PSS:
 	case PKCS11_CKM_SHA512_RSA_PKCS_PSS:
 	/* EC flavors */
+	case PKCS11_CKM_EDDSA:
 	case PKCS11_CKM_ECDSA:
+	case PKCS11_CKM_ECDH1_DERIVE:
 	case PKCS11_CKM_ECDSA_SHA1:
 	case PKCS11_CKM_ECDSA_SHA224:
 	case PKCS11_CKM_ECDSA_SHA256:
@@ -50,7 +50,7 @@ bool processing_is_tee_asymm(uint32_t proc_id)
 
 static enum pkcs11_rc
 pkcs2tee_algorithm(uint32_t *tee_id, uint32_t *tee_hash_id,
-		   enum processing_func function __attribute__((unused)),
+		   enum processing_func function __unused,
 		   struct pkcs11_attribute_head *proc_params,
 		   struct pkcs11_object *obj)
 {
@@ -92,6 +92,8 @@ pkcs2tee_algorithm(uint32_t *tee_id, uint32_t *tee_hash_id,
 		{ PKCS11_CKM_ECDSA_SHA256, 1, TEE_ALG_SHA256 },
 		{ PKCS11_CKM_ECDSA_SHA384, 1, TEE_ALG_SHA384 },
 		{ PKCS11_CKM_ECDSA_SHA512, 1, TEE_ALG_SHA512 },
+		{ PKCS11_CKM_ECDH1_DERIVE, 1, 0 },
+		{ PKCS11_CKM_EDDSA, TEE_ALG_ED25519, 0 },
 	};
 	size_t n = 0;
 	enum pkcs11_rc rc = PKCS11_CKR_GENERAL_ERROR;
@@ -126,6 +128,9 @@ pkcs2tee_algorithm(uint32_t *tee_id, uint32_t *tee_hash_id,
 	case PKCS11_CKM_ECDSA_SHA384:
 	case PKCS11_CKM_ECDSA_SHA512:
 		rc = pkcs2tee_algo_ecdsa(tee_id, proc_params, obj);
+		break;
+	case PKCS11_CKM_ECDH1_DERIVE:
+		rc = pkcs2tee_algo_ecdh(tee_id, proc_params, obj);
 		break;
 	default:
 		rc = PKCS11_CKR_OK;
@@ -163,18 +168,29 @@ static enum pkcs11_rc pkcs2tee_key_type(uint32_t *tee_type,
 
 	switch (type) {
 	case PKCS11_CKK_EC:
-		assert(function != PKCS11_FUNCTION_DERIVE);
-
-		if (class == PKCS11_CKO_PRIVATE_KEY)
-			*tee_type = TEE_TYPE_ECDSA_KEYPAIR;
-		else
-			*tee_type = TEE_TYPE_ECDSA_PUBLIC_KEY;
+		if (class == PKCS11_CKO_PRIVATE_KEY) {
+			if (function == PKCS11_FUNCTION_DERIVE)
+				*tee_type = TEE_TYPE_ECDH_KEYPAIR;
+			else
+				*tee_type = TEE_TYPE_ECDSA_KEYPAIR;
+		} else {
+			if (function == PKCS11_FUNCTION_DERIVE)
+				*tee_type = TEE_TYPE_ECDH_PUBLIC_KEY;
+			else
+				*tee_type = TEE_TYPE_ECDSA_PUBLIC_KEY;
+		}
 		break;
 	case PKCS11_CKK_RSA:
 		if (class == PKCS11_CKO_PRIVATE_KEY)
 			*tee_type = TEE_TYPE_RSA_KEYPAIR;
 		else
 			*tee_type = TEE_TYPE_RSA_PUBLIC_KEY;
+		break;
+	case PKCS11_CKK_EC_EDWARDS:
+		if (class == PKCS11_CKO_PRIVATE_KEY)
+			*tee_type = TEE_TYPE_ED25519_KEYPAIR;
+		else
+			*tee_type = TEE_TYPE_ED25519_PUBLIC_KEY;
 		break;
 	default:
 		TEE_Panic(type);
@@ -212,8 +228,7 @@ allocate_tee_operation(struct pkcs11_session *session,
 		res = TEE_AllocateOperation(&processing->tee_hash_op_handle,
 					    hash_algo, hash_mode, 0);
 		if (res) {
-			OT_LOG(LOG_ERR, "TEE_AllocateOp. failed %#"PRIx32" %#"PRIx32,
-			     hash_algo, hash_mode);
+			EMSG("TEE_AllocateOp. failed %#"PRIx32" %#"PRIx32, hash_algo, hash_mode);
 
 			if (res == TEE_ERROR_NOT_SUPPORTED)
 				return PKCS11_CKR_MECHANISM_INVALID;
@@ -225,15 +240,14 @@ allocate_tee_operation(struct pkcs11_session *session,
 	res = TEE_AllocateOperation(&processing->tee_op_handle,
 				    algo, mode, size);
 	if (res)
-		OT_LOG(LOG_ERR, "TEE_AllocateOp. failed %#"PRIx32" %#"PRIx32" %#"PRIx32,
-		     algo, mode, size);
+		EMSG("TEE_AllocateOp. failed %#"PRIx32" %#"PRIx32" %#"PRIx32, algo, mode, size);
 
 	if (res == TEE_ERROR_NOT_SUPPORTED)
 		return PKCS11_CKR_MECHANISM_INVALID;
 
 	if (res != TEE_SUCCESS &&
 	    processing->tee_hash_op_handle != TEE_HANDLE_NULL) {
-		//TEE_FreeOperation(session->processing->tee_hash_op_handle);
+		TEE_FreeOperation(session->processing->tee_hash_op_handle);
 		processing->tee_hash_op_handle = TEE_HANDLE_NULL;
 		processing->tee_hash_algo = 0;
 	}
@@ -250,7 +264,7 @@ static enum pkcs11_rc load_tee_key(struct pkcs11_session *session,
 	size_t object_size = 0;
 	enum pkcs11_rc rc = PKCS11_CKR_GENERAL_ERROR;
 	TEE_Result res = TEE_ERROR_GENERIC;
-	enum pkcs11_class_id __attribute__((unused)) class = get_class(obj->attributes);
+	enum pkcs11_class_id __maybe_unused class = get_class(obj->attributes);
 	enum pkcs11_key_type type = get_key_type(obj->attributes);
 
 	assert(class == PKCS11_CKO_PUBLIC_KEY ||
@@ -271,6 +285,11 @@ static enum pkcs11_rc load_tee_key(struct pkcs11_session *session,
 			case TEE_TYPE_ECDSA_PUBLIC_KEY:
 			case TEE_TYPE_ECDSA_KEYPAIR:
 				if (function != PKCS11_FUNCTION_DERIVE)
+					goto key_ready;
+				break;
+			case TEE_TYPE_ECDH_PUBLIC_KEY:
+			case TEE_TYPE_ECDH_KEYPAIR:
+				if (function == PKCS11_FUNCTION_DERIVE)
 					goto key_ready;
 				break;
 			default:
@@ -302,6 +321,10 @@ static enum pkcs11_rc load_tee_key(struct pkcs11_session *session,
 	case PKCS11_CKK_EC:
 		rc = load_tee_ec_key_attrs(&tee_attrs, &tee_attrs_count, obj);
 		break;
+	case PKCS11_CKK_EC_EDWARDS:
+		rc = load_tee_eddsa_key_attrs(&tee_attrs, &tee_attrs_count,
+					      obj);
+		break;
 	default:
 		break;
 	}
@@ -311,7 +334,7 @@ static enum pkcs11_rc load_tee_key(struct pkcs11_session *session,
 	res = TEE_AllocateTransientObject(obj->key_type, object_size,
 					  &obj->key_handle);
 	if (res) {
-		//printf("TEE_AllocateTransientObject failed, %#"PRIx32, res);
+		DMSG("TEE_AllocateTransientObject failed, %#"PRIx32, res);
 
 		return tee2pkcs_error(res);
 	}
@@ -322,7 +345,7 @@ static enum pkcs11_rc load_tee_key(struct pkcs11_session *session,
 	TEE_Free(tee_attrs);
 
 	if (res) {
-		//printf("TEE_PopulateTransientObject failed, %#"PRIx32, res);
+		DMSG("TEE_PopulateTransientObject failed, %#"PRIx32, res);
 
 		goto error;
 	}
@@ -331,7 +354,7 @@ key_ready:
 	res = TEE_SetOperationKey(session->processing->tee_op_handle,
 				  obj->key_handle);
 	if (res) {
-		//printf("TEE_SetOperationKey failed, %#"PRIx32, res);
+		DMSG("TEE_SetOperationKey failed, %#"PRIx32, res);
 
 		goto error;
 	}
@@ -367,6 +390,9 @@ init_tee_operation(struct pkcs11_session *session,
 		break;
 	case PKCS11_CKM_RSA_PKCS_OAEP:
 		rc = pkcs2tee_proc_params_rsa_oaep(proc, proc_params);
+		break;
+	case PKCS11_CKM_EDDSA:
+		rc = pkcs2tee_proc_params_eddsa(proc, proc_params);
 		break;
 	default:
 		break;
@@ -418,13 +444,14 @@ enum pkcs11_rc step_asymm_operation(struct pkcs11_session *session,
 	uint32_t in_size = 0;
 	uint32_t in2_size = 0;
 	uint32_t out_size = 0;
-	uint32_t hash_size = 0;
+	size_t hash_size = 0; // ! ### uint32_t hash_size = 0; 
 	TEE_Attribute *tee_attrs = NULL;
 	size_t tee_attrs_count = 0;
 	bool output_data = false;
 	struct active_processing *proc = session->processing;
 	struct rsa_oaep_processing_ctx *rsa_oaep_ctx = NULL;
 	struct rsa_pss_processing_ctx *rsa_pss_ctx = NULL;
+	struct eddsa_processing_ctx *eddsa_ctx = NULL;
 	size_t sz = 0;
 
 	if (TEE_PARAM_TYPE_GET(ptypes, 1) == TEE_PARAM_TYPE_MEMREF_INPUT) {
@@ -478,6 +505,29 @@ enum pkcs11_rc step_asymm_operation(struct pkcs11_session *session,
 				       TEE_ATTR_RSA_PSS_SALT_LENGTH,
 				       rsa_pss_ctx->salt_len, 0);
 		tee_attrs_count++;
+		break;
+	case PKCS11_CKM_EDDSA:
+		eddsa_ctx = proc->extra_ctx;
+
+		tee_attrs = TEE_Malloc(2 * sizeof(TEE_Attribute),
+				       TEE_USER_MEM_HINT_NO_FILL_ZERO);
+		if (!tee_attrs) {
+			rc = PKCS11_CKR_DEVICE_MEMORY;
+			goto out;
+		}
+
+		if (eddsa_ctx->flag) {
+			TEE_InitValueAttribute(&tee_attrs[tee_attrs_count],
+					       TEE_ATTR_EDDSA_PREHASH, 0, 0);
+			tee_attrs_count++;
+		}
+
+		if (eddsa_ctx->ctx_len > 0) {
+			TEE_InitRefAttribute(&tee_attrs[tee_attrs_count],
+					     TEE_ATTR_EDDSA_CTX, eddsa_ctx->ctx,
+					     eddsa_ctx->ctx_len);
+			tee_attrs_count++;
+		}
 		break;
 	case PKCS11_CKM_RSA_PKCS_OAEP:
 		rsa_oaep_ctx = proc->extra_ctx;
@@ -659,6 +709,7 @@ enum pkcs11_rc step_asymm_operation(struct pkcs11_session *session,
 	/* Next perform actual signing operation */
 	switch (proc->mecha_type) {
 	case PKCS11_CKM_ECDSA:
+	case PKCS11_CKM_EDDSA:
 	case PKCS11_CKM_RSA_PKCS:
 	case PKCS11_CKM_RSA_PKCS_OAEP:
 	case PKCS11_CKM_RSA_PKCS_PSS:
@@ -773,6 +824,80 @@ out:
 
 	TEE_Free(hash_buf);
 	TEE_Free(tee_attrs);
+
+	return rc;
+}
+
+enum pkcs11_rc do_asymm_derivation(struct pkcs11_session *session,
+				   struct pkcs11_attribute_head *proc_params,
+				   struct obj_attrs **head)
+{
+	enum pkcs11_rc rc = PKCS11_CKR_GENERAL_ERROR;
+	TEE_ObjectHandle out_handle = TEE_HANDLE_NULL;
+	TEE_Result res = TEE_ERROR_GENERIC;
+	TEE_Attribute tee_attrs[2] = { };
+	size_t tee_attrs_count = 0;
+	uint32_t key_byte_size = 0;
+	uint32_t key_bit_size = 0;
+	void *a_ptr = NULL;
+	size_t a_size = 0;
+
+	/* Remove default attribute set at template sanitization */
+	if (remove_empty_attribute(head, PKCS11_CKA_VALUE))
+		return PKCS11_CKR_FUNCTION_FAILED;
+
+	rc = get_u32_attribute(*head, PKCS11_CKA_VALUE_LEN, &key_bit_size);
+	if (rc)
+		return rc;
+
+	key_bit_size *= 8;
+	key_byte_size = (key_bit_size + 7) / 8;
+
+	res = TEE_AllocateTransientObject(TEE_TYPE_GENERIC_SECRET,
+					  key_byte_size * 8, &out_handle);
+	if (res) {
+		DMSG("TEE_AllocateTransientObject failed, %#"PRIx32, res);
+		return tee2pkcs_error(res);
+	}
+
+	switch (proc_params->id) {
+	case PKCS11_CKM_ECDH1_DERIVE:
+		rc = pkcs2tee_param_ecdh(proc_params, &a_ptr, &a_size);
+		if (rc)
+			goto out;
+
+		TEE_InitRefAttribute(&tee_attrs[tee_attrs_count],
+				     TEE_ATTR_ECC_PUBLIC_VALUE_X,
+				     a_ptr, a_size / 2);
+		tee_attrs_count++;
+		TEE_InitRefAttribute(&tee_attrs[tee_attrs_count],
+				     TEE_ATTR_ECC_PUBLIC_VALUE_Y,
+				     (char *)a_ptr + a_size / 2,
+				     a_size / 2);
+		tee_attrs_count++;
+		break;
+	default:
+		TEE_Panic(proc_params->id);
+		break;
+	}
+
+	TEE_DeriveKey(session->processing->tee_op_handle, &tee_attrs[0],
+		      tee_attrs_count, out_handle);
+
+	rc = alloc_get_tee_attribute_data(out_handle, TEE_ATTR_SECRET_VALUE,
+					  &a_ptr, &a_size);
+	if (rc)
+		goto out;
+
+	if (a_size * 8 < key_bit_size)
+		rc = PKCS11_CKR_KEY_SIZE_RANGE;
+	else
+		rc = add_attribute(head, PKCS11_CKA_VALUE, a_ptr,
+				   key_byte_size);
+	TEE_Free(a_ptr);
+out:
+	release_active_processing(session);
+	TEE_FreeTransientObject(out_handle);
 
 	return rc;
 }

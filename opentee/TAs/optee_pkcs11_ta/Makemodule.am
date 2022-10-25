@@ -5,37 +5,10 @@ CC=afl-gcc-fast
 
 ta_LTLIBRARIES += liboptee_pkcs11_ta.la
 
-liboptee_pkcs11_ta_la_includes = \
-	pkcs11_ta.h \
-	attributes.h \
-	entry.h \
-	handle.h \
-	object.h \
-	pkcs11_attributes.h \
-	pkcs11_helpers.h \
-	pkcs11_token.h \
-	processing.h \
-	sanitize_object.h \
-	serializer.h \
-	token_capabilities.h \
-	user_ta_header_defines.h \
-	bitstring.h \
-	util.h \
-	tee_internal_api.h \
-	tee_internal_api_extensions.h \
-	tee_api_defines_extensions.h \
-	tee_api_types.h \
-	tee_api_defines.h \
-	utee_defines.h \
-	types_ext.h \
-	glob_symb.h \
-	queue.h \
-	printk.h \
-	include/tee_ta_properties.h \
-	string_ext.h \
-	confine_array_index.h
+liboptee_pkcs11_ta_la_includes = 
 
 liboptee_pkcs11_ta_la_SOURCES = ${liboptee_pkcs11_ta_la_includes} \
+	optee_pkcs11_ta/gp/open_tee_conf.c \
 	optee_pkcs11_ta/src/attributes.c \
 	optee_pkcs11_ta/src/entry.c \
 	optee_pkcs11_ta/src/handle.c \
@@ -54,31 +27,40 @@ liboptee_pkcs11_ta_la_SOURCES = ${liboptee_pkcs11_ta_la_includes} \
 	optee_pkcs11_ta/src/sanitize_object.c \
 	optee_pkcs11_ta/src/serializer.c \
 	optee_pkcs11_ta/src/token_capabilities.c \
-	optee_pkcs11_ta/gp/utils.c \
-	optee_pkcs11_ta/ext_optee/snprintk.c \
-	optee_pkcs11_ta/gp/open_tee_conf.c \
-	optee_pkcs11_ta/ext_optee/consttime_memcmp.c
+	optee_pkcs11_ta/additional/libutils/ext/consttime_memcmp.c \
+	optee_pkcs11_ta/additional/custom/tee_uuid_from_str.c \
+	optee_pkcs11_ta/additional/custom/tee_api_property.c \
+	optee_pkcs11_ta/additional/custom/base64.c \
+	optee_pkcs11_ta/additional/custom/user_ta_header.c
+
+#	base64.h/c
+#	tee_api_property.c
+#	tee_internal_api_extension.h
+#	tee_uuid_from_str.c
+# 	__tee_isocket_defines.h
+#	user_ta_header.h
+#	user_ta_header.c
+#	-I$(top_srcdir)/../emulator/internal_api
 
 liboptee_pkcs11_ta_la_CFLAGS = ${AM_CFLAGS} \
-	-iquote $(top_srcdir)/optee_pkcs11_ta/include \
-	-iquote $(top_srcdir)/optee_pkcs11_ta/src \
-	-iquote $(top_srcdir)/optee_pkcs11_ta/common \
-	-iquote $(top_srcdir)/optee_pkcs11_ta/gp \
-	-iquote $(top_srcdir)/optee_pkcs11_ta/ext_optee \
-	-iquote $(top_srcdir)/include \
-	-iquote $(top_srcdir)/../emulator/include \
+	-I$(top_srcdir)/optee_pkcs11_ta/include \
+	-I$(top_srcdir)/optee_pkcs11_ta/src \
+	-I$(top_srcdir)/optee_pkcs11_ta/gp \
+	-I$(top_srcdir)/optee_pkcs11_ta/additional/custom \
+	-I$(top_srcdir)/optee_pkcs11_ta/additional/libutils/ext/include \
+	-I$(top_srcdir)/../emulator/include \
+	-I$(top_srcdir)/../emulator/internal_api \
+	-I$(top_srcdir)/include \
+	-DCFG_PKCS11_TA_TOKEN_COUNT=3 \
+	-DCFG_TEE_TA_LOG_LEVEL=1 \
+	-DCFG_PKCS11_TA_AUTH_TEE_IDENTITY=n \
+	-DTRACE_LEVEL=1 \
+	-DCFG_TA_BIGNUM_MAX_BITS=2048 \
+	-DCFG_PKCS11_TA_HEAP_SIZE="(32 * 1024)" \
+	-DCFG_PKCS11_TA_ALLOW_DIGEST_KEY=y \
 	-fno-stack-protector \
 	-fno-omit-frame-pointer -fno-common \
 	--coverage
 	
 
 liboptee_pkcs11_ta_la_LDFLAGS = ${AM_LDFLAGS} 
-
-
-
-
-
-# kz 
-#include $(top_srcdir)/optee_pkcs11_ta/config.mk
-#include $(top_srcdir)/optee_pkcs11_ta/sub.mk
-#include $(top_srcdir)/optee_pkcs11_ta/user_ta.mk

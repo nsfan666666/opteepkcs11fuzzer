@@ -79,8 +79,7 @@ typedef struct __TEE_OperationHandle *TEE_OperationHandle;
  * \param maxKeySize
  * \return
  */
-TEE_Result TEE_AllocateOperation(TEE_OperationHandle *operation, uint32_t algorithm, uint32_t mode,
-				 uint32_t maxKeySize);
+TEE_Result TEE_AllocateOperation(TEE_OperationHandle *operation, uint32_t algorithm, uint32_t mode, uint32_t maxKeySize);
 
 /*!
  * \brief TEE_FreeOperation
@@ -127,8 +126,7 @@ TEE_Result TEE_SetOperationKey(TEE_OperationHandle operation, TEE_ObjectHandle k
  * \param key2
  * \return
  */
-TEE_Result TEE_SetOperationKey2(TEE_OperationHandle operation, TEE_ObjectHandle key1,
-				TEE_ObjectHandle key2);
+TEE_Result TEE_SetOperationKey2(TEE_OperationHandle operation, TEE_ObjectHandle key1, TEE_ObjectHandle key2);
 
 /*!
  * \brief TEE_CopyOperation
@@ -147,8 +145,7 @@ void TEE_CopyOperation(TEE_OperationHandle dstOperation, TEE_OperationHandle src
  * \param chunk
  * \param chunkSize
  */
-void TEE_DigestUpdate(TEE_OperationHandle operation,
-		      void *chunk, size_t chunkSize);
+void TEE_DigestUpdate(TEE_OperationHandle operation, void *chunk, size_t chunkSize);
 
 /*!
  * \brief TEE_DigestDoFinal
@@ -159,9 +156,10 @@ void TEE_DigestUpdate(TEE_OperationHandle operation,
  * \param hashLen
  * \return
  */
+// ! ### TEE_Result TEE_DigestDoFinal(TEE_OperationHandle operation, void *chunk, size_t chunkLen, void *hash, uint32_t *hashLen);
 TEE_Result TEE_DigestDoFinal(TEE_OperationHandle operation,
 			     void *chunk, size_t chunkLen,
-			     void *hash, uint32_t *hashLen);
+			     void *hash, size_t *hashLen);
 
 /*
  * ## Symmetric Cipher Functions ##
@@ -399,8 +397,7 @@ TEE_Result TEE_AsymmetricVerifyDigest(TEE_OperationHandle operation,
  * \param paramCount
  * \param derivedKey
  */
-void TEE_DeriveKey(TEE_OperationHandle operation, TEE_Attribute *params, uint32_t paramCount,
-		   TEE_ObjectHandle derivedKey);
+void TEE_DeriveKey(TEE_OperationHandle operation, TEE_Attribute *params, uint32_t paramCount, TEE_ObjectHandle derivedKey);
 
 /*
  * ## Random Data Generation Function ##

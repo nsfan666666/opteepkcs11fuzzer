@@ -4,17 +4,15 @@
  */
 
 #include <assert.h>
-#include "pkcs11_ta.h"
-#include "tee_api_defines.h"
-#include "tee_internal_api.h" // opentee
-#include "tee_internal_api_extensions.h"
+#include <pkcs11_ta.h>
+#include <tee_api_defines.h>
+#include <tee_internal_api.h>
+#include <tee_internal_api_extensions.h>
 
 #include "attributes.h"
 #include "object.h"
 #include "pkcs11_token.h"
 #include "processing.h"
-
-#include "tee_logging.h"
 
 enum pkcs11_rc
 pkcs2tee_proc_params_rsa_pss(struct active_processing *proc,
@@ -333,15 +331,13 @@ pkcs2tee_algo_rsa_oaep(uint32_t *tee_id, uint32_t *tee_hash_id,
 			*tee_hash_id = TEE_ALG_SHA512;
 			break;
 		default:
-			OT_LOG(LOG_ERR, "Unexpected %#"PRIx32"/%s", hash,
-			     id2str_proc(hash));
+			EMSG("Unexpected %#"PRIx32"/%s", hash, id2str_proc(hash));
 
 			return PKCS11_CKR_GENERAL_ERROR;
 		}
 		break;
 	default:
-		OT_LOG(LOG_ERR, "Unexpected mechanism %#"PRIx32"/%s", proc_params->id,
-		     id2str_proc(proc_params->id));
+		EMSG("Unexpected mechanism %#"PRIx32"/%s", proc_params->id, id2str_proc(proc_params->id));
 
 		return PKCS11_CKR_GENERAL_ERROR;
 	}
@@ -572,7 +568,7 @@ enum pkcs11_rc generate_rsa_keys(struct pkcs11_attribute_head *proc_params,
 	    remove_empty_attribute(priv_head, PKCS11_CKA_EXPONENT_1) ||
 	    remove_empty_attribute(priv_head, PKCS11_CKA_EXPONENT_2) ||
 	    remove_empty_attribute(priv_head, PKCS11_CKA_COEFFICIENT)) {
-		OT_LOG(LOG_ERR, "Unexpected attribute(s) found");
+		EMSG("Unexpected attribute(s) found");
 		rc = PKCS11_CKR_TEMPLATE_INCONSISTENT;
 		goto out;
 	}
@@ -581,7 +577,7 @@ enum pkcs11_rc generate_rsa_keys(struct pkcs11_attribute_head *proc_params,
 	res = TEE_AllocateTransientObject(TEE_TYPE_RSA_KEYPAIR, modulus_bits,
 					  &tee_obj);
 	if (res) {
-		//printf("TEE_AllocateTransientObject failed %#"PRIx32, res);
+		DMSG("TEE_AllocateTransientObject failed %#"PRIx32, res);
 
 		rc = tee2pkcs_error(res);
 		goto out;
@@ -589,7 +585,7 @@ enum pkcs11_rc generate_rsa_keys(struct pkcs11_attribute_head *proc_params,
 
 	res = TEE_RestrictObjectUsage1(tee_obj, TEE_USAGE_EXTRACTABLE);
 	if (res) {
-		//printf("TEE_RestrictObjectUsage1 failed %#"PRIx32, res);
+		DMSG("TEE_RestrictObjectUsage1 failed %#"PRIx32, res);
 
 		rc = tee2pkcs_error(res);
 		goto out;
@@ -597,7 +593,7 @@ enum pkcs11_rc generate_rsa_keys(struct pkcs11_attribute_head *proc_params,
 
 	res = TEE_GenerateKey(tee_obj, modulus_bits, tee_attrs, tee_count);
 	if (res) {
-		//printf("TEE_GenerateKey failed %#"PRIx32, res);
+		DMSG("TEE_GenerateKey failed %#"PRIx32, res);
 
 		rc = tee2pkcs_error(res);
 		goto out;

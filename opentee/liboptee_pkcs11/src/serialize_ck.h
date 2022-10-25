@@ -5,7 +5,7 @@
 #ifndef LIBCKTEEC_SERIALIZE_CK_H
 #define LIBCKTEEC_SERIALIZE_CK_H
 
-#include "pkcs11.h"
+#include <pkcs11.h>
 
 #include "serializer.h"
 

@@ -3,11 +3,12 @@
  * Copyright (c) 2017, Linaro Limited
  */
 
+// ? // pkcs11 client library help functions
+
 #ifndef LIBCKTEEC_PKCS11_TOKEN_H
 #define LIBCKTEEC_PKCS11_TOKEN_H
 
-#include "pkcs11.h"
-#include "pkcs11_ta.h"
+#include <pkcs11.h>
 
 #include "invoke_ta.h"
 

@@ -6,9 +6,9 @@
 #define PKCS11_TA_PKCS11_TOKEN_H
 
 #include <sys/queue.h>
-//#include "tee_api_types.h"
-#include "tee_internal_api.h" // opentee
-#include "utee_defines.h"
+#include <tee_api_types.h>
+#include <tee_internal_api.h>
+#include <utee_defines.h>
 
 #include "handle.h"
 #include "object.h"
@@ -232,23 +232,23 @@ enum pkcs11_rc verify_identity_auth(struct ck_token *token,
 				    enum pkcs11_user_type user_type);
 #else
 static inline enum pkcs11_rc
-setup_so_identity_auth_from_client(struct ck_token *token __attribute__((unused)))
+setup_so_identity_auth_from_client(struct ck_token *token __unused)
 {
 	return PKCS11_CKR_PIN_INVALID;
 }
 
 static inline enum pkcs11_rc
-setup_identity_auth_from_pin(struct ck_token *token __attribute__((unused)),
-			     enum pkcs11_user_type user_type __attribute__((unused)),
-			     const uint8_t *pin __attribute__((unused)),
-			     size_t pin_size __attribute__((unused)))
+setup_identity_auth_from_pin(struct ck_token *token __unused,
+			     enum pkcs11_user_type user_type __unused,
+			     const uint8_t *pin __unused,
+			     size_t pin_size __unused)
 {
 	return PKCS11_CKR_PIN_INVALID;
 }
 
 static inline enum pkcs11_rc
-verify_identity_auth(struct ck_token *token __attribute__((unused)),
-		     enum pkcs11_user_type user_type __attribute__((unused)))
+verify_identity_auth(struct ck_token *token __unused,
+		     enum pkcs11_user_type user_type __unused)
 {
 	return PKCS11_CKR_PIN_INCORRECT;
 }

@@ -1,1 +1,10 @@
-pkcs11_ta.h is a Linux hardlink to TAs/optee_pkcs11_ta/include/pkcs11_ta.h
+Linux hard link
+===============
+pkcs11_ta.h --> TAs/optee_pkcs11_ta/include/pkcs11_ta.h
+
+trace.h --> TAs/optee_pkcs11_ta/additional/libutils/ext/include/trace.h
+
+trace_levels.h --> TAs/optee_pkcs11_ta/additional/libutils/ext/include/trace_levels.h
+
+print_functions.h --> tests/internal_api/print_functions.h 
+

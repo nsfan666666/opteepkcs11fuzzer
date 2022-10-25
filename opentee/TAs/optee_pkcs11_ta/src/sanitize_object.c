@@ -3,18 +3,15 @@
  * Copyright (c) 2017-2020, Linaro Limited
  */
 
-#include "compiler.h"
 #include <assert.h>
-#include "bitstring.h"
-#include "pkcs11_ta.h"
+#include <bitstring.h>
+#include <pkcs11_ta.h>
 #include <stdlib.h>
 #include <string.h>
-#include "util.h"
-#include "tee_internal_api.h" // opentee
-#include "tee_internal_api_extensions.h"
-#include "tee_api_defines.h"
-//#include <trace.h>
-#include "tee_logging.h"
+#include <util.h>
+#include <tee_internal_api.h>
+#include <tee_internal_api_extensions.h>
+#include <trace.h>
 
 #include "attributes.h"
 #include "pkcs11_helpers.h"
@@ -101,7 +98,7 @@ static enum pkcs11_rc sanitize_class_and_type(struct obj_attrs **dst, void *src,
 
 			if (class_found != PKCS11_CKO_UNDEFINED_ID &&
 			    class_found != class) {
-				OT_LOG(LOG_ERR, "Conflicting class value");
+				EMSG("Conflicting class value");
 				rc = PKCS11_CKR_TEMPLATE_INCONSISTENT;
 				goto err;
 			}
@@ -123,7 +120,7 @@ static enum pkcs11_rc sanitize_class_and_type(struct obj_attrs **dst, void *src,
 
 			if (type_found != PKCS11_CKK_UNDEFINED_ID &&
 			    type_found != type) {
-				OT_LOG(LOG_ERR, "Conflicting type-in-class value");
+				EMSG("Conflicting type-in-class value");
 				rc = PKCS11_CKR_TEMPLATE_INCONSISTENT;
 				goto err;
 			}
@@ -301,7 +298,7 @@ enum pkcs11_rc sanitize_client_object(struct obj_attrs **dst, void *src,
 		}
 
 		if (!valid_pkcs11_attribute_id(cli_ref.id, cli_ref.size)) {
-			OT_LOG(LOG_ERR, "Invalid attribute id %#"PRIx32, cli_ref.id);
+			EMSG("Invalid attribute id %#"PRIx32, cli_ref.id);
 			return PKCS11_CKR_TEMPLATE_INCONSISTENT;
 		}
 
@@ -347,33 +344,33 @@ static void __trace_attributes(char *prefix, void *src, void *end)
 
 		next = sizeof(pkcs11_ref) + pkcs11_ref.size;
 
-		//printf("%s Attr %s / %s (%#04"PRIx32" %"PRIu32"-byte)",
-		//	 prefix, id2str_attr(pkcs11_ref.id),
-		//	 id2str_attr_value(pkcs11_ref.id, pkcs11_ref.size,
-		//			   cur + sizeof(pkcs11_ref)),
-		//	 pkcs11_ref.id, pkcs11_ref.size);
+		DMSG_RAW("%s Attr %s / %s (%#04"PRIx32" %"PRIu32"-byte)",
+			 prefix, id2str_attr(pkcs11_ref.id),
+			 id2str_attr_value(pkcs11_ref.id, pkcs11_ref.size,
+					   cur + sizeof(pkcs11_ref)),
+			 pkcs11_ref.id, pkcs11_ref.size);
 
 		switch (pkcs11_ref.size) {
 		case 0:
 			break;
 		case 1:
-			//printf("%s Attr byte value: %02x", prefix, data[0]);
+			DMSG_RAW("%s Attr byte value: %02x", prefix, data[0]);
 			break;
 		case 2:
-			//printf("%s Attr byte value: %02x %02x",
-				 //prefix, data[0], data[1]);
+			DMSG_RAW("%s Attr byte value: %02x %02x",
+				 prefix, data[0], data[1]);
 			break;
 		case 3:
-			//printf("%s Attr byte value: %02x %02x %02x",
-				// prefix, data[0], data[1], data[2]);
+			DMSG_RAW("%s Attr byte value: %02x %02x %02x",
+				 prefix, data[0], data[1], data[2]);
 			break;
 		case 4:
-			//printf("%s Attr byte value: %02x %02x %02x %02x",
-				// prefix, data[0], data[1], data[2], data[3]);
+			DMSG_RAW("%s Attr byte value: %02x %02x %02x %02x",
+				 prefix, data[0], data[1], data[2], data[3]);
 			break;
 		default:
-			//printf("%s Attr byte value: %02x %02x %02x %02x ...",
-				 //prefix, data[0], data[1], data[2], data[3]);
+			DMSG_RAW("%s Attr byte value: %02x %02x %02x %02x ...",
+				 prefix, data[0], data[1], data[2], data[3]);
 			break;
 		}
 
@@ -392,7 +389,7 @@ static void __trace_attributes(char *prefix, void *src, void *end)
 
 	/* Sanity */
 	if (cur != (char *)end)
-		OT_LOG(LOG_ERR, "Warning: unexpected alignment issue");
+		EMSG("Warning: unexpected alignment issue");
 
 	TEE_Free(prefix2);
 }
@@ -406,29 +403,28 @@ void trace_attributes_from_api_head(const char *prefix, void *ref, size_t size)
 	TEE_MemMove(&head, ref, sizeof(head));
 
 	if (size > sizeof(head) + head.attrs_size) {
-		OT_LOG(LOG_ERR, "template overflows client buffer (%zu/%zu)",
-		     size, sizeof(head) + head.attrs_size);
+		EMSG("template overflows client buffer (%zu/%zu)", size, sizeof(head) + head.attrs_size);
 		return;
 	}
 
 	pre = TEE_Malloc(prefix ? strlen(prefix) + 2 : 2, TEE_MALLOC_FILL_ZERO);
 	if (!pre) {
-		OT_LOG(LOG_ERR, "%s: out of memory", prefix);
+		EMSG("%s: out of memory", prefix);
 		return;
 	}
 	if (prefix)
 		TEE_MemMove(pre, prefix, strlen(prefix));
 
-	//printf("%s,--- (serial object) Attributes list --------", pre);
-	//printf("%s| %"PRIu32" item(s) - %"PRIu32" bytes",
-	//	 pre, head.attrs_count, head.attrs_size);
+	DMSG_RAW("%s,--- (serial object) Attributes list --------", pre);
+	DMSG_RAW("%s| %"PRIu32" item(s) - %"PRIu32" bytes",
+		 pre, head.attrs_count, head.attrs_size);
 
 	offset = sizeof(head);
 	pre[prefix ? strlen(prefix) : 0] = '|';
 	__trace_attributes(pre, (char *)ref + offset,
 			   (char *)ref + offset + head.attrs_size);
 
-	//printf("%s`-----------------------", prefix ? prefix : "");
+	DMSG_RAW("%s`-----------------------", prefix ? prefix : "");
 
 	TEE_Free(pre);
 }

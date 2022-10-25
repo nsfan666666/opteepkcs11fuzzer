@@ -86,158 +86,6 @@ struct session_internal {
 #define FOR_EACH_PARAM(i) for (i = 0; i < 4; ++i)
 
 
-
-
-
-
-
-
-// ! Write the corpus entry to filesystem
-
-void write_corpus_entry(void *buf, size_t buf_sz) 
-{
-	char *dir_path = "/home/sekai/corpus_entries/";
-	FILE *f_ptr = NULL;
-	struct stat f_stat = {0};
-	char entry_name[10];
-	char entry_full_path[PATH_MAX];
-	size_t i = 0;
-
-	// create dir if non-existent
-
-	if (stat(dir_path, &f_stat) == -1) {
-		mkdir(dir_path, 0700);
-	}
-
-	// create a new entry in dir 
-
-	memset(entry_full_path, 0, sizeof(entry_full_path));
-	memcpy(entry_full_path, dir_path, strlen(dir_path)); // strlen counts string without null character \0
-
-	while (1) {
-
-		snprintf(entry_name, 10, "%zu", i); // convert int to str
-		memcpy(entry_full_path + strlen(dir_path), entry_name, strlen(entry_name) + 1);
-
-    	if (stat(entry_full_path, &f_stat) == -1)
-			break;
-
-		i++;
-
-	}
-
-	if ((f_ptr = fopen(entry_full_path, "wb")) == NULL) 
-		OT_LOG(LOG_ERR, "fopen failed: %s\n", strerror(errno));
-		
-	if (fwrite(buf, buf_sz, 1, f_ptr) != 1) // retrns nb of elements written 
-		OT_LOG(LOG_ERR, "fwrite failed: %s\n", strerror(errno));
-	
-	printf("Created a new entry at %s\n", entry_full_path);
-
-	fclose(f_ptr);
-}
-
-// ! Create a corpus entry
-
-void create_corpus_entry(void *data, size_t data_sz, int cmd) 
-{
-	size_t buf_sz = sizeof(cmd) + data_sz;
-	void *buf = alloca(buf_sz);
-	
-	memset(buf, 0, buf_sz);
-	memcpy(buf, &cmd, sizeof(cmd));
-	memcpy((int *)buf + 1, data, data_sz);
-
-
-
-
-	// size_t t_sz;
-	// int t_cmd;
-	
-	// afl_split_input(buf, buf_sz, &t_sz, &t_cmd);
-	// printf("KZ\n");
-	// printf("read t_cmd=%d, t_sz=%zu, data_sz=%zu\n", t_cmd, t_sz, data_sz);
-
-
-
-
-	write_corpus_entry(buf, buf_sz);
-}
-
-// ! Print corpuse entries
-
-void print_corpus_entries_info() 
-{
-	char *dir_path = "/tmp/corpus_entries/";
-	FILE *f_ptr = NULL;
-	struct stat f_stat = {0};
-	DIR *dir_stream;
-	struct dirent *n_dir;
-	char entry_full_path[PATH_MAX];
-	void *buf;
-	size_t buf_sz;
-	int cmd;
-
-	if (stat(dir_path, &f_stat) == -1) {
-		OT_LOG(LOG_ERR, "read_corpus_entries: the input directory cannot be found\n");
-		return;
-	}
-
-	// find all files in path directory
-
-	if ((dir_stream = opendir(dir_path)) == NULL) {
-		OT_LOG(LOG_ERR, "cannot open %s: %s", dir_path, strerror(errno));
-		return;
-	}
-
-	memset(entry_full_path, 0, sizeof(entry_full_path));
-	memcpy(entry_full_path, dir_path, strlen(dir_path)); // strlen counts string without null character \0
-
-	if (dir_stream) {
-
-		// skip . and .. directories
-		readdir(dir_stream); 
-		readdir(dir_stream); 
-
-		while ((n_dir = readdir(dir_stream)) != NULL)
-		{
-
-			memcpy(entry_full_path + strlen(dir_path), n_dir->d_name, strlen(n_dir->d_name) + 1); // strlen counts string without null character \0
-
-			if ((f_ptr = fopen(entry_full_path, "rb")) == NULL) {
-				OT_LOG(LOG_ERR, "cannot open %s for read: %s", entry_full_path, strerror(errno));
-				continue;
-			}
-
-			// find out size of file
-			fseek(f_ptr, 0L, SEEK_END); // seek to the end of the file
-			buf_sz = ftell(f_ptr); // ask for the position
-
-			rewind(f_ptr); // seek back to beginning of file
-			
-			buf = alloca(buf_sz); // stack allocation
-
-			fread(buf, buf_sz, 1, f_ptr);
-
-			cmd = *(int *) (buf);
-			printf("[entry_cmd=%d][entry_path=%s][entry_size=%zu]\n", cmd, entry_full_path, buf_sz);
-
-		}
-		closedir(dir_stream);	
-	}
-	fclose(f_ptr);
-}
-
-
-
-
-
-
-
-
-
-
-
 static bool get_return_vals_from_err_msg(void *msg, TEE_Result *err_name, uint32_t *err_origin)
 {
 	uint8_t msg_name;
@@ -485,7 +333,7 @@ static TEEC_Result create_shared_mem(TEEC_Context *context, TEEC_SharedMemory *s
 	 * must be stored seperatly in the "implementation deined section" */
 	if (type == ALLOCATED)
 		shared_mem->buffer = shm_internal->reg_address;
-
+	
 	shared_mem->imp = shm_internal;
 	return ret;
 }
@@ -775,7 +623,7 @@ TEEC_Result TEEC_InitializeContext(const char *name, TEEC_Context *context)
 	/* We ignore the name as we are only communicating with a single instance of the emulator */
 	(void)name;
 
-	if (!context || ctx_internal.ctx_status == CTX_INTERNAL_INIT) {
+	if (!context) { // ! changed from `if (!context|| ctx_internal.ctx_status == CTX_INTERNAL_INIT) {` for xtest to work
 		OT_LOG(LOG_ERR, "Contex NULL or initialized");
 		return TEEC_ERROR_BAD_PARAMETERS;
 	}
@@ -934,7 +782,7 @@ TEEC_Result TEEC_RegisterSharedMemory(TEEC_Context *context, TEEC_SharedMemory *
 }
 
 TEEC_Result TEEC_AllocateSharedMemory(TEEC_Context *context, TEEC_SharedMemory *shared_mem)
-{
+{	
 	return create_shared_mem(context, shared_mem, ALLOCATED);
 }
 
@@ -1202,7 +1050,6 @@ TEEC_Result TEEC_InvokeCommand(TEEC_Session *session, uint32_t command_id,
 	com_ret = register_temp_refs(operation, temp_shm);
 	if (com_ret != TEEC_SUCCESS)
 		return com_ret;
-
 	if (operation)
 		copy_tee_operation_to_internal(operation, &invoke_msg.operation);
 	else

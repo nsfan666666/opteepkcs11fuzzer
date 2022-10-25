@@ -4,16 +4,14 @@
  */
 
 #include <assert.h>
-//#include <config.h>
-#include "pkcs11_ta.h"
+#include <config.h>
+#include <pkcs11_ta.h>
 #include <string.h>
-#include "tee_api_defines.h"
-#include "tee_internal_api.h" // opentee
-#include "tee_internal_api_extensions.h"
-#include "utee_defines.h"
-#include "util.h"
-#include "../../tests/internal_api/print_functions.h"
-#include "glob_symb.h"
+#include <tee_api_defines.h>
+#include <tee_internal_api.h>
+#include <tee_internal_api_extensions.h>
+#include <utee_defines.h>
+#include <util.h>
 
 #include "attributes.h"
 #include "object.h"
@@ -22,8 +20,6 @@
 #include "pkcs11_token.h"
 #include "processing.h"
 #include "serializer.h"
-
-#include "tee_logging.h"
 
 bool processing_is_tee_digest(enum pkcs11_mechanism_id mecha_id)
 {
@@ -81,7 +77,7 @@ allocate_tee_operation(struct pkcs11_session *session,
 	res = TEE_AllocateOperation(&session->processing->tee_op_handle,
 				    algo, TEE_MODE_DIGEST, 0);
 	if (res)
-		OT_LOG(LOG_ERR, "TEE_AllocateOp. failed %#"PRIx32, algo);
+		EMSG("TEE_AllocateOp. failed %#"PRIx32, algo);
 
 	if (res == TEE_ERROR_NOT_SUPPORTED)
 		return PKCS11_CKR_MECHANISM_INVALID;
@@ -116,7 +112,7 @@ enum pkcs11_rc step_digest_operation(struct pkcs11_session *session,
 	void *in_buf = NULL;
 	size_t in_size = 0;
 	void *out_buf = NULL;
-	uint32_t out_size = 0;
+	size_t out_size = 0; // ! ### uin32_t out_size = 0;
 	void *secret_value = NULL;
 	uint32_t secret_value_size = 0;
 	enum pkcs11_key_type key_type = PKCS11_CKK_UNDEFINED_ID;

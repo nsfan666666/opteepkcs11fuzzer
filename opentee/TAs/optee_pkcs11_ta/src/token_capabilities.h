@@ -6,7 +6,7 @@
 #ifndef TOKEN_CAPABILITIES_H
 #define TOKEN_CAPABILITIES_H
 
-#include "pkcs11_ta.h"
+#include <pkcs11_ta.h>
 #include <stdbool.h>
 #include <stdint.h>
 

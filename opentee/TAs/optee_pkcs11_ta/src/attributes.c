@@ -4,18 +4,16 @@
  */
 
 #include <assert.h>
-//#include <compiler.h>
-#include "pkcs11_ta.h"
+#include <compiler.h>
+#include <pkcs11_ta.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include "string_ext.h"
-#include "tee_api_defines.h"//?
-#include "tee_internal_api.h" // opentee
-#include "tee_internal_api_extensions.h"
-//#include <trace.h>
-#include "tee_logging.h"
-#include "util.h"
+#include <string_ext.h>
+#include <tee_internal_api.h>
+#include <tee_internal_api_extensions.h>
+#include <trace.h>
+#include <util.h>
 
 #include "attributes.h"
 #include "pkcs11_helpers.h"
@@ -93,7 +91,7 @@ static enum pkcs11_rc _remove_attribute(struct obj_attrs **head,
 		return PKCS11_CKR_OK;
 	}
 
-	//printf("Attribute %s (%#x) not found", id2str_attr(attribute), attribute);
+	DMSG("Attribute %s (%#x) not found", id2str_attr(attribute), attribute);
 	return PKCS11_RV_NOT_FOUND;
 }
 
@@ -145,7 +143,7 @@ void get_attribute_ptrs(struct obj_attrs *head, uint32_t attribute,
 
 	/* Sanity */
 	if (cur > end) {
-		//printf("Exceeding serial object length");
+		DMSG("Exceeding serial object length");
 		TEE_Panic(0);
 	}
 
@@ -255,7 +253,7 @@ bool attributes_match_reference(struct obj_attrs *candidate,
 	uint32_t rc = PKCS11_CKR_GENERAL_ERROR;
 
 	if (!ref->attrs_count) {
-		//printf("Empty reference match all");
+		DMSG("Empty reference match all");
 		return true;
 	}
 
@@ -420,7 +418,7 @@ static void __trace_attributes(char *prefix, void *src, void *end)
 
 	/* Sanity */
 	if (cur != end)
-		OT_LOG(LOG_ERR, "Warning: unexpected alignment in object attributes");
+		EMSG("Warning: unexpected alignment in object attributes");
 
 	TEE_Free(prefix2);
 }
@@ -437,7 +435,7 @@ void trace_attributes(const char *prefix, void *ref)
 
 	pre = TEE_Malloc(prefix ? strlen(prefix) + 2 : 2, TEE_MALLOC_FILL_ZERO);
 	if (!pre) {
-		OT_LOG(LOG_ERR, "%s: out of memory", prefix);
+		EMSG("%s: out of memory", prefix);
 		return;
 	}
 

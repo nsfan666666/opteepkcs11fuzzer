@@ -187,9 +187,11 @@ void TEE_DigestUpdate(TEE_OperationHandle operation,
 
 // ! changed from TEE_Result TEE_DigestDoFinal(TEE_OperationHandle, void *, size_t , void *, size_t *)
 // ? OP-TEEs function signature doesn't follow GP 1.1.2 or 1.3.1? 
+// ? Follow Open-TEEs signature!
+// ! ### TEE_Result TEE_DigestDoFinal(TEE_OperationHandle operation, void *chunk, size_t chunkLen, void *hash, uint32_t *hashLen)
 TEE_Result TEE_DigestDoFinal(TEE_OperationHandle operation,
 			     void *chunk, size_t chunkLen,
-			     void *hash, uint32_t *hashLen)
+			     void *hash, size_t *hashLen)
 {
 	if (operation == NULL) {
 		OT_LOG_ERR("TEE_DigestDoFinal panics due operation handle NULL");

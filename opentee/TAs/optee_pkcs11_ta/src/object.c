@@ -5,9 +5,9 @@
 
 #include <assert.h>
 #include <inttypes.h>
-#include "string_ext.h"
-#include "tee_internal_api.h" // opentee
-#include "tee_internal_api_extensions.h"
+#include <string_ext.h>
+#include <tee_internal_api.h>
+#include <tee_internal_api_extensions.h>
 
 #include "attributes.h"
 #include "handle.h"
@@ -17,8 +17,6 @@
 #include "pkcs11_token.h"
 #include "sanitize_object.h"
 #include "serializer.h"
-
-#include "tee_logging.h"
 
 /*
  * Temporary list used to register allocated struct pkcs11_object instances
@@ -221,7 +219,6 @@ enum pkcs11_rc create_object(void *sess, struct obj_attrs *head,
 	 * We do not check the key attributes. At this point, key attributes
 	 * are expected consistent and reliable.
 	 */
-	
 
 	obj = create_obj_instance(head, NULL);
 	if (!obj)
@@ -391,8 +388,8 @@ enum pkcs11_rc entry_create_object(struct pkcs11_client *client,
 	TEE_MemMove(out->memref.buffer, &obj_handle, sizeof(obj_handle));
 	out->memref.size = sizeof(obj_handle);
 
-	//printf("PKCS11 session %"PRIu32": import object %#"PRIx32,
-	  //   session->handle, obj_handle);
+	DMSG("PKCS11 session %"PRIu32": import object %#"PRIx32,
+	     session->handle, obj_handle);
 
 out:
 	TEE_Free(template);
@@ -438,7 +435,7 @@ enum pkcs11_rc entry_destroy_object(struct pkcs11_client *client,
 	/* Only session objects can be destroyed during a read-only session */
 	if (get_bool(object->attributes, PKCS11_CKA_TOKEN) &&
 	    !pkcs11_session_is_read_write(session)) {
-		//printf("Can't destroy persistent object");
+		DMSG("Can't destroy persistent object");
 		return PKCS11_CKR_SESSION_READ_ONLY;
 	}
 
@@ -455,8 +452,8 @@ enum pkcs11_rc entry_destroy_object(struct pkcs11_client *client,
 
 	destroy_object(session, object, false);
 
-	//printf("PKCS11 session %"PRIu32": destroy object %#"PRIx32,
-	     //session->handle, object_handle);
+	DMSG("PKCS11 session %"PRIu32": destroy object %#"PRIx32,
+	     session->handle, object_handle);
 
 	return rc;
 }
@@ -474,8 +471,7 @@ static void release_find_obj_context(struct pkcs11_find_objects *find_ctx)
 static enum pkcs11_rc find_ctx_add(struct pkcs11_find_objects *find_ctx,
 				   uint32_t handle)
 {
-	uint32_t *hdls = TEE_Realloc(find_ctx->handles,
-				     (find_ctx->count + 1) * sizeof(*hdls));
+	uint32_t *hdls = TEE_Realloc(find_ctx->handles, (find_ctx->count + 1) * sizeof(*hdls));
 
 	if (!hdls)
 		return PKCS11_CKR_DEVICE_MEMORY;
@@ -531,7 +527,7 @@ enum pkcs11_rc entry_find_objects_init(struct pkcs11_client *client,
 	}
 
 	if (session->find_ctx) {
-		OT_LOG(LOG_ERR, "Active object search already in progress");
+		EMSG("Active object search already in progress");
 		rc = PKCS11_CKR_FUNCTION_FAILED;
 		goto out;
 	}
@@ -562,7 +558,7 @@ enum pkcs11_rc entry_find_objects_init(struct pkcs11_client *client,
 	case PKCS11_CKO_CERTIFICATE:
 		break;
 	default:
-		OT_LOG(LOG_ERR, "Find object of class %s (%"PRIu32") is not supported",
+		EMSG("Find object of class %s (%"PRIu32") is not supported",
 		     id2str_class(get_class(req_attrs)),
 		     get_class(req_attrs));
 		rc = PKCS11_CKR_ARGUMENTS_BAD;
@@ -697,7 +693,7 @@ enum pkcs11_rc entry_find_objects(struct pkcs11_client *client,
 	/* Update output buffer according the number of handles provided */
 	out->memref.size = count * sizeof(uint32_t);
 
-	//printf("PKCS11 session %"PRIu32": finding objects", session->handle);
+	DMSG("PKCS11 session %"PRIu32": finding objects", session->handle);
 
 	return PKCS11_CKR_OK;
 }
@@ -901,8 +897,8 @@ enum pkcs11_rc entry_get_attribute_value(struct pkcs11_client *client,
 	/* Move updated template to out buffer */
 	TEE_MemMove(out->memref.buffer, template, out->memref.size);
 
-	//printf("PKCS11 session %"PRIu32": get attributes %#"PRIx32,
-	     //session->handle, object_handle);
+	DMSG("PKCS11 session %"PRIu32": get attributes %#"PRIx32,
+	     session->handle, object_handle);
 
 out:
 	TEE_Free(template);
@@ -1009,7 +1005,7 @@ enum pkcs11_rc entry_set_attribute_value(struct pkcs11_client *client,
 	/* Only session objects can be modified during a read-only session */
 	if (object_is_token(obj->attributes) &&
 	    !pkcs11_session_is_read_write(session)) {
-		//printf("Can't modify persistent object in a RO session");
+		DMSG("Can't modify persistent object in a RO session");
 		rc = PKCS11_CKR_SESSION_READ_ONLY;
 		goto out;
 	}
@@ -1062,8 +1058,8 @@ enum pkcs11_rc entry_set_attribute_value(struct pkcs11_client *client,
 			goto out;
 	}
 
-	//printf("PKCS11 session %"PRIu32": set attributes %#"PRIx32,
-	    // session->handle, object_handle);
+	DMSG("PKCS11 session %"PRIu32": set attributes %#"PRIx32,
+	     session->handle, object_handle);
 
 out:
 	TEE_Free(head);
@@ -1125,7 +1121,7 @@ enum pkcs11_rc entry_copy_object(struct pkcs11_client *client, uint32_t ptypes,
 	/* Only session objects can be modified during a read-only session */
 	if (object_is_token(obj->attributes) &&
 	    !pkcs11_session_is_read_write(session)) {
-		//printf("Can't modify persistent object in a RO session");
+		DMSG("Can't modify persistent object in a RO session");
 		rc = PKCS11_CKR_SESSION_READ_ONLY;
 		goto out;
 	}
@@ -1229,8 +1225,8 @@ enum pkcs11_rc entry_copy_object(struct pkcs11_client *client, uint32_t ptypes,
 	TEE_MemMove(out->memref.buffer, &obj_handle, sizeof(obj_handle));
 	out->memref.size = sizeof(obj_handle);
 
-	//printf("PKCS11 session %"PRIu32": copy object %#"PRIx32,
-	     //session->handle, obj_handle);
+	DMSG("PKCS11 session %"PRIu32": copy object %#"PRIx32,
+	     session->handle, obj_handle);
 
 out:
 	TEE_Free(head_new);

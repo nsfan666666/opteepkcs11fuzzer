@@ -10,6 +10,6 @@ CFG_PKCS11_TA_HEAP_SIZE ?= (32 * 1024)
 # Defines the number of PKCS11 token implemented by the PKCS11 TA
 CFG_PKCS11_TA_TOKEN_COUNT ?= 3
 
-# global-incdirs-y += include
-# global-incdirs-y += src
-# subdirs-y += src
+global-incdirs-y += include
+global-incdirs-y += src
+subdirs-y += src

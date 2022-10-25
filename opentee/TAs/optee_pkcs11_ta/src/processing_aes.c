@@ -4,11 +4,10 @@
  */
 
 #include <assert.h>
-//#include <compiler.h>
-#include "tee_internal_api.h" // opentee
-//#include <trace.h>
-#include "tee_logging.h"
-#include "util.h"
+#include <compiler.h>
+#include <tee_internal_api.h>
+#include <trace.h>
+#include <util.h>
 
 #include "pkcs11_helpers.h"
 #include "pkcs11_token.h"
@@ -41,8 +40,8 @@ enum pkcs11_rc tee_init_ctr_operation(struct active_processing *processing,
 		return PKCS11_CKR_ARGUMENTS_BAD;
 
 	if (incr_counter != 1) {
-		//printf("Supports only 1 bit increment counter: %"PRIu32,
-		     //incr_counter);
+		DMSG("Supports only 1 bit increment counter: %"PRIu32,
+		     incr_counter);
 
 		return PKCS11_CKR_MECHANISM_PARAM_INVALID;
 	}

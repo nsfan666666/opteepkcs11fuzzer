@@ -6,7 +6,7 @@
 #ifndef USER_TA_HEADER_DEFINES_H
 #define USER_TA_HEADER_DEFINES_H
 
-#include "pkcs11_ta.h"
+#include <pkcs11_ta.h>
 
 #define TA_UUID				PKCS11_TA_UUID
 

@@ -9,7 +9,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include "util.h"
+#include <util.h>
 
 #include "pkcs11_helpers.h"
 
@@ -311,10 +311,11 @@ static inline enum pkcs11_mechanism_id get_mechanism_type(struct obj_attrs *head
 bool get_bool(struct obj_attrs *head, uint32_t attribute);
 
 #if CFG_TEE_TA_LOG_LEVEL > 0
-/* Debug: dump object attributes to OT_LOG(LOG_INFO, ) trace console */
+/* Debug: dump object attributes to IMSG() trace console */
 void trace_attributes(const char *prefix, void *ref);
 #else
-static inline void trace_attributes(const char *prefix __attribute__((unused)), void *ref __attribute__((unused)))
+static inline void trace_attributes(const char *prefix __unused,
+				    void *ref __unused)
 {
 }
 #endif /*CFG_TEE_TA_LOG_LEVEL*/

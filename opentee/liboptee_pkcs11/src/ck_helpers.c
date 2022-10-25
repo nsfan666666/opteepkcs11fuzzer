@@ -4,10 +4,10 @@
  */
 
 #include <assert.h>
-#include "ck_debug.h"
-#include "pkcs11.h"
+#include <ck_debug.h>
+#include <pkcs11.h>
 #include <stdio.h>
-#include "tee_client_api.h"
+#include <tee_client_api.h>
 
 #include "ck_helpers.h"
 

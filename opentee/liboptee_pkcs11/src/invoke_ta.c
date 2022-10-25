@@ -14,37 +14,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <tee_client_api.h> // Open-TEE GP API
+#include <trace.h> // #include <teec_trace.h>
 #include <unistd.h>
-#include "tee_client_api.h"
-//#include <teec_trace.h>
+#include <pkcs11.h>
 
-#include "pkcs11.h"
 #include "ck_helpers.h"
 #include "invoke_ta.h"
 #include "local_utils.h"
-
-
-
-// ! Print buffer in hexdump -C format
-
-void print_hex(void *buf, size_t buf_sz)
-{
-	size_t i;
-	for (i = 1; i <= buf_sz; ++i) {
-  		printf("%02x ", ((uint8_t*) buf)[i-1]);
-
-		if (i == 0) 
-			continue;
-
-		if (i % 8 == 0)
-			printf(" ");
-
-		if (i % 16 == 0)
-			printf("\n");
-	}
-	printf("\n");
-}
-
 
 
 struct ta_context {
@@ -163,16 +140,16 @@ CK_RV ckteec_invoke_ta(unsigned long cmd, TEEC_SharedMemory *ctrl,
 		return CKR_ARGUMENTS_BAD;
 
 
-	printf("[ckteec_invoke_ta]\n");
-	printf("|--------------------|\n");
-	printf("cmd=%d\n", command);
+	// printf("[ckteec_invoke_ta]\n");
+	// printf("|--------------------|\n");
+	// printf("cmd=%d\n", command);
 	
 	if (ctrl) {
 		op.paramTypes |= TEEC_PARAM_TYPES(TEEC_MEMREF_WHOLE, 0, 0, 0);
 		op.params[0].memref.parent = ctrl;
 
-		printf("ctrl:\n");
-		print_hex(op.params[0].memref.parent->buffer, op.params[0].memref.parent->size);
+		// printf("ctrl:\n");
+		// print_hex(op.params[0].memref.parent->buffer, op.params[0].memref.parent->size);
 
 	} else {
 		/* TA mandates param#0 as in/out memref for output status */
@@ -185,22 +162,22 @@ CK_RV ckteec_invoke_ta(unsigned long cmd, TEEC_SharedMemory *ctrl,
 		op.paramTypes |= TEEC_PARAM_TYPES(0, TEEC_MEMREF_WHOLE, 0, 0);
 		op.params[1].memref.parent = io1;
 
-		printf("io1:\n");
-		print_hex(op.params[1].memref.parent->buffer, op.params[1].memref.parent->size);
+		// printf("io1:\n");
+		// print_hex(op.params[1].memref.parent->buffer, op.params[1].memref.parent->size);
 	}
 
 	if (io2) {
 		op.paramTypes |= TEEC_PARAM_TYPES(0, 0, TEEC_MEMREF_WHOLE, 0);
 		op.params[2].memref.parent = io2;
 
-		printf("shm of size %zu is sent to TA via io2\n", op.params[2].memref.size);
+		// printf("shm of size %zu is sent to TA via io2\n", op.params[2].memref.size);
 	}
 
 	if (io3) {
 		op.paramTypes |= TEEC_PARAM_TYPES(0, 0, 0, TEEC_MEMREF_WHOLE);
 		op.params[3].memref.parent = io3;
 
-		printf("shm of size %zu is sent to TA via io3\n", op.params[3].memref.size);
+		// printf("shm of size %zu is sent to TA via io3\n", op.params[3].memref.size);
 	}
 
 
@@ -287,14 +264,12 @@ static CK_RV ping_ta(void)
 
 	if (ta_version[0] != PKCS11_TA_VERSION_MAJOR &&
 	    ta_version[1] > PKCS11_TA_VERSION_MINOR) {
-		//EMSG("PKCS11 TA version mismatch: %"PRIu32".%"PRIu32".%"PRIu32,
-		     //ta_version[0], ta_version[1], ta_version[2]);
+		EMSG("PKCS11 TA version mismatch: %"PRIu32".%"PRIu32".%"PRIu32, ta_version[0], ta_version[1], ta_version[2]);
 
 		return CKR_DEVICE_ERROR;
 	}
 
-	//DMSG("PKCS11 TA version %"PRIu32".%"PRIu32".%"PRIu32,
-	     //ta_version[0], ta_version[1], ta_version[2]);
+	DMSG("PKCS11 TA version %"PRIu32".%"PRIu32".%"PRIu32, ta_version[0], ta_version[1], ta_version[2]);
 
 	return CKR_OK;
 }
@@ -324,7 +299,7 @@ CK_RV ckteec_invoke_init(void)
 		} else if (strcmp(login_type_env, "group") == 0) {
 			login_gid_env = getenv("CKTEEC_LOGIN_GID");
 			if (!login_gid_env || !strlen(login_gid_env)) {
-				//EMSG("missing CKTEEC_LOGIN_GID");
+				EMSG("missing CKTEEC_LOGIN_GID");
 				rv = CKR_ARGUMENTS_BAD;
 				goto out;
 			}
@@ -333,7 +308,7 @@ CK_RV ckteec_invoke_init(void)
 			tmpconv = strtoul(login_gid_env, &endp, 10);
 			if (errno == ERANGE || tmpconv > (gid_t)-1 ||
 			    (login_gid_env + strlen(login_gid_env) != endp)) {
-				//EMSG("failed to convert CKTEEC_LOGIN_GID");
+				EMSG("failed to convert CKTEEC_LOGIN_GID");
 				rv = CKR_ARGUMENTS_BAD;
 				goto out;
 			}
@@ -341,7 +316,7 @@ CK_RV ckteec_invoke_init(void)
 			login_gid = (gid_t)tmpconv;
 			login_data = &login_gid;
 		} else {
-			//EMSG("invalid value for CKTEEC_LOGIN_TYPE");
+			EMSG("invalid value for CKTEEC_LOGIN_TYPE");
 			rv = CKR_ARGUMENTS_BAD;
 			goto out;
 		}
@@ -360,7 +335,7 @@ CK_RV ckteec_invoke_init(void)
 	
 	if (res != TEEC_SUCCESS) {
 
-		//EMSG("TEEC init context failed\n");
+		EMSG("TEEC init context failed\n");
 		rv = CKR_DEVICE_ERROR;
 		goto out;
 	}
@@ -369,7 +344,7 @@ CK_RV ckteec_invoke_init(void)
 			       login_method, login_data, NULL, &origin);
 	if (res != TEEC_SUCCESS) {
 
-		//EMSG("TEEC open session failed %x from %d\n", res, origin);
+		EMSG("TEEC open session failed %x from %d\n", res, origin);
 		TEEC_FinalizeContext(&ta_ctx.context);
 		rv = CKR_DEVICE_ERROR;
 		goto out;
@@ -387,8 +362,8 @@ CK_RV ckteec_invoke_init(void)
 out:
 	e = pthread_mutex_unlock(&ta_ctx.init_mutex);
 	if (e) {
-		//EMSG("pthread_mutex_unlock: %s", strerror(e));
-		//EMSG("terminating...");
+		EMSG("pthread_mutex_unlock: %s", strerror(e));
+		EMSG("terminating...");
 		exit(EXIT_FAILURE);
 	}
 
@@ -402,8 +377,8 @@ CK_RV ckteec_invoke_terminate(void)
 
 	e = pthread_mutex_lock(&ta_ctx.init_mutex);
 	if (e) {
-		//EMSG("pthread_mutex_lock: %s", strerror(e));
-		//EMSG("terminating...");
+		EMSG("pthread_mutex_lock: %s", strerror(e));
+		EMSG("terminating...");
 		exit(EXIT_FAILURE);
 	}
 
@@ -419,8 +394,8 @@ CK_RV ckteec_invoke_terminate(void)
 out:
 	e = pthread_mutex_unlock(&ta_ctx.init_mutex);
 	if (e) {
-		//EMSG("pthread_mutex_unlock: %s", strerror(e));
-		//EMSG("terminating...");
+		EMSG("pthread_mutex_unlock: %s", strerror(e));
+		EMSG("terminating...");
 		exit(EXIT_FAILURE);
 	}
 

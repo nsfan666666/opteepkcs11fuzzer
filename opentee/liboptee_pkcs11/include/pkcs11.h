@@ -3,6 +3,8 @@
  * Copyright (c) 2018-2020, Linaro Limited
  */
 
+// ? pkcs11 API
+
 #ifndef PKCS11_H
 #define PKCS11_H
 

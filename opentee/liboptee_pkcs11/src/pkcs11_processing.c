@@ -3,12 +3,14 @@
  * Copyright (c) 2017-2018, Linaro Limited
  */
 
+#include <pkcs11.h>
+#include <pkcs11_ta.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "tee_client_api.h"
+#include <tee_client_api.h>
+#include <corpus.h>
 
-#include "pkcs11.h"
 #include "pkcs11_processing.h"
 #include "invoke_ta.h"
 #include "serializer.h"
@@ -34,23 +36,6 @@ CK_RV ck_create_object(CK_SESSION_HANDLE session, CK_ATTRIBUTE_PTR attribs,
 	if (rv)
 		goto out;
 
-
-
-
-
-	// ! Create a corpus entry from the cmd and data
-	// void *tmp = alloca(3);
-	// memcpy(tmp, "ABC", 3);
-
-	// // create_corpus_entry(obj.buffer, obj.size, PKCS11_CMD_CREATE_OBJECT);
-	// create_corpus_entry(tmp, sizeof(tmp), PKCS11_CMD_CREATE_OBJECT);
-	// print_corpus_entries_info();
-
-
-
-
-
-
 	/* Shm io0: (i/o) [session-handle][serialized-attributes] / [status] */
 	ctrl_size = sizeof(session_handle) + obj.size;
 	ctrl = ckteec_alloc_shm(ctrl_size, CKTEEC_SHM_INOUT);
@@ -72,6 +57,10 @@ CK_RV ck_create_object(CK_SESSION_HANDLE session, CK_ATTRIBUTE_PTR attribs,
 		rv = CKR_HOST_MEMORY;
 		goto out;
 	}
+
+#ifdef ENABLE_CORPUS
+	// create_corpus_entry(obj.buffer, obj.size, PKCS11_CMD_CREATE_OBJECT);
+#endif
 
 	rv = ckteec_invoke_ctrl_out(PKCS11_CMD_CREATE_OBJECT,
 				    ctrl, out_shm, &out_size);
@@ -166,6 +155,12 @@ CK_RV ck_encdecrypt_init(CK_SESSION_HANDLE session,
 
 	memcpy(buf, obj.buffer, obj.size);
 
+#ifdef ENABLE_CORPUS
+	// create_corpus_entry(obj.buffer, obj.size, decrypt ? PKCS11_CMD_DECRYPT_INIT : PKCS11_CMD_ENCRYPT_INIT);
+#endif
+// printf("ctrl->size=%zu\n", ctrl->size);
+// print_hex(ctrl->buffer, ctrl->size);
+// while(1);
 	rv = ckteec_invoke_ctrl(decrypt ? PKCS11_CMD_DECRYPT_INIT :
 				PKCS11_CMD_ENCRYPT_INIT, ctrl);
 
@@ -416,6 +411,9 @@ CK_RV ck_digest_init(CK_SESSION_HANDLE session, CK_MECHANISM_PTR mechanism)
 
 	memcpy(buf, obj.buffer, obj.size);
 
+#ifdef ENABLE_CORPUS
+	// create_corpus_entry(obj.buffer, obj.size, PKCS11_CMD_DIGEST_INIT);
+#endif
 	rv = ckteec_invoke_ctrl(PKCS11_CMD_DIGEST_INIT, ctrl);
 
 bail:
@@ -687,6 +685,9 @@ CK_RV ck_signverify_init(CK_SESSION_HANDLE session,
 
 	memcpy(buf, obj.buffer, obj.size);
 
+#ifdef ENABLE_CORPUS
+	create_corpus_entry(obj.buffer, obj.size, sign ? PKCS11_CMD_SIGN_INIT : PKCS11_CMD_VERIFY_INIT);
+#endif
 	rv = ckteec_invoke_ctrl(sign ? PKCS11_CMD_SIGN_INIT :
 				PKCS11_CMD_VERIFY_INIT, ctrl);
 
@@ -882,7 +883,7 @@ bail_invoked:
 
 	return rv;
 }
-
+#include <print_functions.h>
 CK_RV ck_generate_key(CK_SESSION_HANDLE session,
 		      CK_MECHANISM_PTR mechanism,
 		      CK_ATTRIBUTE_PTR attribs,
@@ -941,6 +942,10 @@ CK_RV ck_generate_key(CK_SESSION_HANDLE session,
 		goto bail;
 	}
 
+#ifdef ENABLE_CORPUS
+	// create_corpus_entry(ctrl->buffer + sizeof(session_handle), smecha.size + sattr.size, PKCS11_CMD_GENERATE_KEY);
+#endif
+
 	rv = ckteec_invoke_ctrl_out(PKCS11_CMD_GENERATE_KEY,
 				    ctrl, out_shm, &out_size);
 
@@ -998,6 +1003,9 @@ CK_RV ck_find_objects_init(CK_SESSION_HANDLE session,
 
 	memcpy(buf, obj.buffer, obj.size);
 
+#ifdef ENABLE_CORPUS
+	// create_corpus_entry(obj.buffer, obj.size, PKCS11_CMD_FIND_OBJECTS_INIT);
+#endif
 	rv = ckteec_invoke_ctrl(PKCS11_CMD_FIND_OBJECTS_INIT, ctrl);
 
 bail:
@@ -1193,6 +1201,9 @@ CK_RV ck_get_attribute_value(CK_SESSION_HANDLE session,
 		goto bail;
 	}
 
+#ifdef ENABLE_CORPUS
+	// create_corpus_entry(sattr.buffer, sattr.size, PKCS11_CMD_GET_ATTRIBUTE_VALUE);
+#endif
 	rv = ckteec_invoke_ctrl_out(PKCS11_CMD_GET_ATTRIBUTE_VALUE,
 				    ctrl, out_shm, &out_size);
 
@@ -1310,6 +1321,9 @@ CK_RV ck_copy_object(CK_SESSION_HANDLE session,
 		goto bail;
 	}
 
+#ifdef ENABLE_CORPUS
+	// create_corpus_entry(sattr.buffer, sattr.size, PKCS11_CMD_COPY_OBJECT);
+#endif
 	rv = ckteec_invoke_ctrl_out(PKCS11_CMD_COPY_OBJECT,
 				    ctrl, out_shm, &out_size);
 	if (rv != CKR_OK || out_size != out_shm->size) {
@@ -1393,6 +1407,9 @@ CK_RV ck_derive_key(CK_SESSION_HANDLE session,
 		goto bail;
 	}
 
+#ifdef ENABLE_CORPUS
+	// create_corpus_entry(ctrl->buffer + sizeof(session_handle) + sizeof(obj_handle), smecha.size + sattr.size, PKCS11_CMD_DERIVE_KEY);
+#endif
 	rv = ckteec_invoke_ctrl_out(PKCS11_CMD_DERIVE_KEY,
 				    ctrl, out_shm, &out_size);
 
@@ -1519,6 +1536,14 @@ CK_RV ck_generate_key_pair(CK_SESSION_HANDLE session,
 		goto bail;
 	}
 
+#ifdef ENABLE_CORPUS
+	// create_corpus_entry(ctrl->buffer + sizeof(session_handle), smecha.size + pub_sattr.size + priv_sattr.size, PKCS11_CMD_GENERATE_KEY_PAIR);
+#endif
+
+// printf("ctrl->size=%zu\n", ctrl->size);
+// print_hex(ctrl->buffer, ctrl->size);
+// while(1);
+
 	rv = ckteec_invoke_ctrl_out(PKCS11_CMD_GENERATE_KEY_PAIR,
 				    ctrl, out_shm, &out_size);
 
@@ -1531,6 +1556,9 @@ CK_RV ck_generate_key_pair(CK_SESSION_HANDLE session,
 	key_handle = out_shm->buffer;
 	*pub_key = key_handle[0];
 	*priv_key = key_handle[1];
+
+// print_hex(pub_key, sizeof(*pub_key));
+// print_hex(priv_key, sizeof(*priv_key));
 
 bail:
 	ckteec_free_shm(out_shm);
@@ -1605,6 +1633,9 @@ CK_RV ck_wrap_key(CK_SESSION_HANDLE session, CK_MECHANISM_PTR mechanism,
 		goto bail;
 	}
 
+#ifdef ENABLE_CORPUS
+	// create_corpus_entry(smecha.buffer, smecha.size, PKCS11_CMD_WRAP_KEY);
+#endif
 	rv = ckteec_invoke_ctrl_out(PKCS11_CMD_WRAP_KEY, ctrl, out_shm,
 				    &out_size);
 
@@ -1698,6 +1729,9 @@ CK_RV ck_unwrap_key(CK_SESSION_HANDLE session, CK_MECHANISM_PTR mechanism,
 		goto bail;
 	}
 
+#ifdef ENABLE_CORPUS
+	// create_corpus_entry(ctrl->buffer + sizeof(session_handle) + sizeof(unwrapping_key_handle), smecha.size + sattr.size, PKCS11_CMD_UNWRAP_KEY);
+#endif
 	rv = ckteec_invoke_ta(PKCS11_CMD_UNWRAP_KEY, ctrl, in_shm, out_shm,
 			      &out_size, NULL, NULL);
 

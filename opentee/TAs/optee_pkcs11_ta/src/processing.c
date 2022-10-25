@@ -4,12 +4,12 @@
  */
 
 #include <assert.h>
-#include "pkcs11_ta.h"
+#include <pkcs11_ta.h>
 #include <string.h>
-#include "tee_api_defines.h"
-#include "tee_internal_api.h" // opentee
-#include "tee_internal_api_extensions.h"
-#include "util.h"
+#include <tee_api_defines.h>
+#include <tee_internal_api.h>
+#include <tee_internal_api_extensions.h>
+#include <util.h>
 
 #include "attributes.h"
 #include "object.h"
@@ -18,8 +18,6 @@
 #include "pkcs11_token.h"
 #include "processing.h"
 #include "serializer.h"
-
-#include "tee_logging.h"
 
 static enum pkcs11_rc get_ready_session(struct pkcs11_session *session)
 {
@@ -61,7 +59,6 @@ static enum processing_func func_for_cmd(enum pkcs11_ta_cmd cmd)
 static bool func_matches_state(enum processing_func function,
 			       enum pkcs11_proc_state state)
 {
-
 	switch (function) {
 	case PKCS11_FUNCTION_ENCRYPT:
 		return state == PKCS11_SESSION_ENCRYPTING ||
@@ -96,9 +93,9 @@ static enum pkcs11_rc get_active_session(struct pkcs11_session *session,
 	enum pkcs11_rc rc = PKCS11_CKR_OPERATION_NOT_INITIALIZED;
 
 	if (session->processing &&
-	    func_matches_state(function, session->processing->state)){
+	    func_matches_state(function, session->processing->state))
 		rc = PKCS11_CKR_OK;
-	}
+
 	return rc;
 }
 
@@ -108,13 +105,13 @@ void release_active_processing(struct pkcs11_session *session)
 		return;
 
 	if (session->processing->tee_hash_op_handle != TEE_HANDLE_NULL) {
-		//TEE_FreeOperation(session->processing->tee_hash_op_handle);
+		TEE_FreeOperation(session->processing->tee_hash_op_handle);
 		session->processing->tee_hash_op_handle = TEE_HANDLE_NULL;
 		session->processing->tee_hash_algo = 0;
 	}
 
 	if (session->processing->tee_op_handle != TEE_HANDLE_NULL) {
-		//TEE_FreeOperation(session->processing->tee_op_handle);
+		TEE_FreeOperation(session->processing->tee_op_handle);
 		session->processing->tee_op_handle = TEE_HANDLE_NULL;
 	}
 
@@ -154,6 +151,12 @@ size_t get_object_key_bit_size(struct pkcs11_object *obj)
 			return 0;
 
 		return ec_params2tee_keysize(a_ptr, a_size);
+	case PKCS11_CKK_EC_EDWARDS:
+		if (get_attribute_ptr(attrs, PKCS11_CKA_EC_POINT, NULL,
+				      &a_size))
+			return 0;
+
+		return a_size * 8;
 	default:
 		TEE_Panic(0);
 		return 0;
@@ -173,8 +176,8 @@ static enum pkcs11_rc generate_random_key_value(struct obj_attrs **head)
 
 	rc = get_attribute_ptr(*head, PKCS11_CKA_VALUE_LEN, &data, &data_size);
 	if (rc || data_size != sizeof(uint32_t)) {
-		//printf("%s", rc ? "No attribute value_len found" :
-		     //"Invalid size for attribute VALUE_LEN");
+		DMSG("%s", rc ? "No attribute value_len found" :
+		     "Invalid size for attribute VALUE_LEN");
 
 		return PKCS11_CKR_ATTRIBUTE_VALUE_INVALID;
 	}
@@ -249,7 +252,7 @@ enum pkcs11_rc entry_generate_secret(struct pkcs11_client *client,
 						PKCS11_FUNCTION_GENERATE,
 						PKCS11_FUNC_STEP_INIT);
 	if (rc) {
-		//printf("Invalid mechanism %#"PRIx32": %#x", proc_params->id, rc);
+		DMSG("Invalid mechanism %#"PRIx32": %#x", proc_params->id, rc);
 		goto out;
 	}
 
@@ -319,8 +322,8 @@ enum pkcs11_rc entry_generate_secret(struct pkcs11_client *client,
 	TEE_MemMove(out->memref.buffer, &obj_handle, sizeof(obj_handle));
 	out->memref.size = sizeof(obj_handle);
 
-	//printf("PKCS11 session %"PRIu32": generate secret %#"PRIx32,
-	    // session->handle, obj_handle);
+	DMSG("PKCS11 session %"PRIu32": generate secret %#"PRIx32,
+	     session->handle, obj_handle);
 
 out:
 	TEE_Free(proc_params);
@@ -339,7 +342,7 @@ enum pkcs11_rc alloc_get_tee_attribute_data(TEE_ObjectHandle tee_obj,
 	uint32_t sz = 0;
 
 	res = TEE_GetObjectBufferAttribute(tee_obj, attribute, NULL, &sz);
-	if (res != TEE_ERROR_SHORT_BUFFER) 
+	if (res != TEE_ERROR_SHORT_BUFFER)
 		return PKCS11_CKR_FUNCTION_FAILED;
 
 	ptr = TEE_Malloc(sz, TEE_USER_MEM_HINT_NO_FILL_ZERO);
@@ -348,7 +351,7 @@ enum pkcs11_rc alloc_get_tee_attribute_data(TEE_ObjectHandle tee_obj,
 
 	res = TEE_GetObjectBufferAttribute(tee_obj, attribute, ptr, &sz);
 	if (res) {
-		TEE_Free(ptr);			
+		TEE_Free(ptr);
 	} else {
 		*data = ptr;
 		*size = sz;
@@ -376,23 +379,17 @@ enum pkcs11_rc tee2pkcs_add_attribute(struct obj_attrs **head,
 
 out:
 	if (rc)
-		OT_LOG(LOG_ERR, "Failed TEE attribute %#"PRIx32" for %#"PRIx32"/%s",
-		     tee_id, pkcs11_id, id2str_attr(pkcs11_id));
+		EMSG("Failed TEE attribute %#"PRIx32" for %#"PRIx32"/%s", tee_id, pkcs11_id, id2str_attr(pkcs11_id));
 	return rc;
 }
 
 enum pkcs11_rc entry_generate_key_pair(struct pkcs11_client *client,
 				       uint32_t ptypes, TEE_Param *params)
 {
-
-	OT_LOG(LOG_ERR, "Inisde entry_generate_key_pair");
-
 	const uint32_t exp_pt = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INOUT,
 						TEE_PARAM_TYPE_NONE,
 						TEE_PARAM_TYPE_MEMREF_OUTPUT,
 						TEE_PARAM_TYPE_NONE);
-
-
 	TEE_Param *ctrl = params;
 	TEE_Param *out = params + 2;
 	enum pkcs11_rc rc = PKCS11_CKR_GENERAL_ERROR;
@@ -413,7 +410,6 @@ enum pkcs11_rc entry_generate_key_pair(struct pkcs11_client *client,
 
 	if (!client || ptypes != exp_pt || out->memref.size != out_ref_size)
 		return PKCS11_CKR_ARGUMENTS_BAD;
-	OT_LOG(LOG_ERR, "Inisde entry_generate_key_pair 2");
 
 	serialargs_init(&ctrlargs, ctrl->memref.buffer, ctrl->memref.size);
 
@@ -437,7 +433,6 @@ enum pkcs11_rc entry_generate_key_pair(struct pkcs11_client *client,
 		rc = PKCS11_CKR_ARGUMENTS_BAD;
 		goto out;
 	}
-	OT_LOG(LOG_ERR, "Inisde entry_generate_key_pair 3");
 
 	rc = get_ready_session(session);
 	if (rc)
@@ -448,7 +443,6 @@ enum pkcs11_rc entry_generate_key_pair(struct pkcs11_client *client,
 						PKCS11_FUNC_STEP_INIT);
 	if (rc)
 		goto out;
-	OT_LOG(LOG_ERR, "Inisde entry_generate_key_pair 4");
 
 	pub_template_size = sizeof(*pub_template) + pub_template->attrs_size;
 
@@ -474,8 +468,6 @@ enum pkcs11_rc entry_generate_key_pair(struct pkcs11_client *client,
 	if (rc)
 		goto out;
 
-	OT_LOG(LOG_ERR, "Inisde entry_generate_key_pair 5");
-
 	TEE_Free(priv_template);
 	priv_template = NULL;
 
@@ -488,7 +480,6 @@ enum pkcs11_rc entry_generate_key_pair(struct pkcs11_client *client,
 	rc = check_created_attrs(pub_head, priv_head);
 	if (rc)
 		goto out;
-	OT_LOG(LOG_ERR, "Inisde entry_generate_key_pair 6");
 
 	rc = check_created_attrs_against_processing(proc_params->id, pub_head);
 	if (rc)
@@ -498,8 +489,6 @@ enum pkcs11_rc entry_generate_key_pair(struct pkcs11_client *client,
 						    priv_head);
 	if (rc)
 		goto out;
-
-	OT_LOG(LOG_ERR, "Inisde entry_generate_key_pair 7");
 
 	rc = check_created_attrs_against_token(session, pub_head);
 	if (rc)
@@ -516,10 +505,12 @@ enum pkcs11_rc entry_generate_key_pair(struct pkcs11_client *client,
 	rc = check_access_attrs_against_token(session, priv_head);
 	if (rc)
 		goto out;
-	OT_LOG(LOG_ERR, "Inisde entry_generate_key_pair 8");
 
 	/* Generate key pair */
 	switch (proc_params->id) {
+	case PKCS11_CKM_EC_EDWARDS_KEY_PAIR_GEN:
+		rc = generate_eddsa_keys(proc_params, &pub_head, &priv_head);
+		break;
 	case PKCS11_CKM_EC_KEY_PAIR_GEN:
 		rc = generate_ec_keys(proc_params, &pub_head, &priv_head);
 		break;
@@ -532,7 +523,6 @@ enum pkcs11_rc entry_generate_key_pair(struct pkcs11_client *client,
 	}
 	if (rc)
 		goto out;
-	OT_LOG(LOG_ERR, "Inisde entry_generate_key_pair 9");
 
 	TEE_Free(proc_params);
 	proc_params = NULL;
@@ -567,8 +557,8 @@ enum pkcs11_rc entry_generate_key_pair(struct pkcs11_client *client,
 	pubkey_handle = 0;
 	privkey_handle = 0;
 
-	//printf("PKCS11 session %"PRIu32": create key pair %#"PRIx32"/%#"PRIx32,
-	     //session->handle, privkey_handle, pubkey_handle);
+	DMSG("PKCS11 session %"PRIu32": create key pair %#"PRIx32"/%#"PRIx32,
+	     session->handle, privkey_handle, pubkey_handle);
 
 out:
 	if (pubkey_handle) {
@@ -680,6 +670,9 @@ enum pkcs11_rc entry_processing_init(struct pkcs11_client *client,
 
 	if (rc == PKCS11_CKR_OK) {
 		session->processing->mecha_type = proc_params->id;
+		DMSG("PKCS11 session %"PRIu32": init processing %s %s",
+		     session->handle, id2str_proc(proc_params->id),
+		     id2str_function(function));
 	}
 
 out:
@@ -775,6 +768,9 @@ enum pkcs11_rc entry_processing_step(struct pkcs11_client *client,
 	if (rc == PKCS11_CKR_OK && (step == PKCS11_FUNC_STEP_UPDATE ||
 				    step == PKCS11_FUNC_STEP_UPDATE_KEY)) {
 		session->processing->step = PKCS11_FUNC_STEP_UPDATE;
+		DMSG("PKCS11 session%"PRIu32": processing %s %s",
+		     session->handle, id2str_proc(mecha_type),
+		     id2str_function(function));
 	}
 
 	if (rc == PKCS11_CKR_BUFFER_TOO_SMALL &&
@@ -991,6 +987,20 @@ enum pkcs11_rc entry_processing_key(struct pkcs11_client *client,
 		}
 		if (rc)
 			goto out;
+		
+	} else if (processing_is_tee_asymm(proc_params->id)) {
+		assert(function == PKCS11_FUNCTION_DERIVE);
+
+		rc = init_asymm_operation(session, function, proc_params,
+					  parent);
+		if (rc)
+			goto out;
+
+		rc = do_asymm_derivation(session, proc_params, &head);
+		if (rc)
+			goto out;
+
+		goto done;
 	} else {
 		rc = PKCS11_CKR_MECHANISM_INVALID;
 		goto out;
@@ -1000,6 +1010,7 @@ enum pkcs11_rc entry_processing_key(struct pkcs11_client *client,
 	if (rc)
 		goto out;
 
+done:
 	TEE_Free(out_buf);
 	out_buf = NULL;
 
@@ -1024,8 +1035,8 @@ enum pkcs11_rc entry_processing_key(struct pkcs11_client *client,
 	TEE_MemMove(out->memref.buffer, &obj_handle, sizeof(obj_handle));
 	out->memref.size = sizeof(obj_handle);
 
-	//printf("PKCS11 session %"PRIu32": derive secret %#"PRIx32,
-	     //session->handle, obj_handle);
+	DMSG("PKCS11 session %"PRIu32": derive secret %#"PRIx32,
+	     session->handle, obj_handle);
 
 out:
 	release_active_processing(session);
@@ -1077,7 +1088,7 @@ enum pkcs11_rc entry_release_active_processing(struct pkcs11_client *client,
 
 	release_active_processing(session);
 
-	//printf("PKCS11 session %"PRIu32": release processing", session->handle);
+	DMSG("PKCS11 session %"PRIu32": release processing", session->handle);
 
 	return PKCS11_CKR_OK;
 }
@@ -1207,14 +1218,14 @@ enum pkcs11_rc entry_wrap_key(struct pkcs11_client *client,
 
 	/* Check if key to be wrapped is extractable */
 	if (!get_bool(key->attributes, PKCS11_CKA_EXTRACTABLE)) {
-		//printf("Extractable property is false");
+		DMSG("Extractable property is false");
 		rc = PKCS11_CKR_KEY_UNEXTRACTABLE;
 		goto out;
 	}
 
 	if (get_bool(key->attributes, PKCS11_CKA_WRAP_WITH_TRUSTED) &&
 	    !get_bool(wrapping_key->attributes, PKCS11_CKA_TRUSTED)) {
-		//printf("Wrap with trusted not satisfied");
+		DMSG("Wrap with trusted not satisfied");
 		rc = PKCS11_CKR_KEY_NOT_WRAPPABLE;
 		goto out;
 	}

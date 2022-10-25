@@ -3,20 +3,15 @@
  * Copyright (c) 2017-2020, Linaro Limited
  */
 
-#include "glob_symb.h"
 #include <assert.h>
-#include "pkcs11_ta.h"
+#include <pkcs11_ta.h>
 #include <string.h>
-#include "util.h"
-//#include <tee_api.h>
-//#include "tee_internal_client_api.c" //?
-#include "tee_internal_api.h" // opentee
-#include "tee_internal_api_extensions.h"
+#include <util.h>
+#include <tee_internal_api.h> // #include <tee_api.h>
+#include <tee_internal_api_extensions.h>
 
 #include "pkcs11_helpers.h"
 #include "token_capabilities.h"
-
-#include "tee_logging.h"
 
 #define ALLOWED_PKCS11_CKFM	\
 	(PKCS11_CKFM_ENCRYPT | PKCS11_CKFM_DECRYPT |		\
@@ -115,12 +110,18 @@ static const struct pkcs11_mechachism_modes pkcs11_modes[] = {
 	/* EC */
 	MECHANISM(PKCS11_CKM_EC_KEY_PAIR_GEN, PKCS11_CKFM_GENERATE_KEY_PAIR,
 		  ANY_PART),
+	MECHANISM(PKCS11_CKM_ECDH1_DERIVE, PKCS11_CKFM_DERIVE,
+		  ANY_PART),
 	MECHANISM(PKCS11_CKM_ECDSA, CKFM_AUTH_NO_RECOVER, SINGLE_PART_ONLY),
 	MECHANISM(PKCS11_CKM_ECDSA_SHA1, CKFM_AUTH_NO_RECOVER, ANY_PART),
 	MECHANISM(PKCS11_CKM_ECDSA_SHA224, CKFM_AUTH_NO_RECOVER, ANY_PART),
 	MECHANISM(PKCS11_CKM_ECDSA_SHA256, CKFM_AUTH_NO_RECOVER, ANY_PART),
 	MECHANISM(PKCS11_CKM_ECDSA_SHA384, CKFM_AUTH_NO_RECOVER, ANY_PART),
 	MECHANISM(PKCS11_CKM_ECDSA_SHA512, CKFM_AUTH_NO_RECOVER, ANY_PART),
+	/* EDDSA */
+	MECHANISM(PKCS11_CKM_EC_EDWARDS_KEY_PAIR_GEN,
+		  PKCS11_CKFM_GENERATE_KEY_PAIR, ANY_PART),
+	MECHANISM(PKCS11_CKM_EDDSA, CKFM_AUTH_NO_RECOVER, ANY_PART),
 	/* RSA */
 	MECHANISM(PKCS11_CKM_RSA_PKCS_KEY_PAIR_GEN,
 		  PKCS11_CKFM_GENERATE_KEY_PAIR, ANY_PART),
@@ -178,7 +179,7 @@ bool mechanism_is_valid(enum pkcs11_mechanism_id id)
 /*
  * Return true if mechanism ID is valid and flags matches PKCS#11 compliancy
  */
-bool __attribute__((unused)) mechanism_flags_complies_pkcs11(uint32_t mechanism_type,
+bool __maybe_unused mechanism_flags_complies_pkcs11(uint32_t mechanism_type,
 						    uint32_t flags)
 {
 	size_t n = 0;
@@ -188,9 +189,7 @@ bool __attribute__((unused)) mechanism_flags_complies_pkcs11(uint32_t mechanism_
 	for (n = 0; n < ARRAY_SIZE(pkcs11_modes); n++) {
 		if (pkcs11_modes[n].id == mechanism_type) {
 			if (flags & ~pkcs11_modes[n].flags)
-				OT_LOG(LOG_ERR, "%s flags: 0x%"PRIx32" vs 0x%"PRIx32,
-				     id2str_mechanism(mechanism_type),
-				     flags, pkcs11_modes[n].flags);
+				EMSG("%s flags: 0x%"PRIx32" vs 0x%"PRIx32, id2str_mechanism(mechanism_type), flags, pkcs11_modes[n].flags);
 
 			return (flags & ~pkcs11_modes[n].flags) == 0;
 		}
@@ -227,13 +226,13 @@ bool mechanism_is_one_shot_only(uint32_t mechanism_type)
 const struct pkcs11_mechachism_modes token_mechanism[] = {
 	TA_MECHANISM(PKCS11_CKM_AES_ECB, CKFM_CIPHER_WRAP),
 	TA_MECHANISM(PKCS11_CKM_AES_CBC, CKFM_CIPHER_WRAP),
-	TA_MECHANISM(PKCS11_CKM_AES_CBC_PAD, CKFM_CIPHER),
 	TA_MECHANISM(PKCS11_CKM_AES_CTR, CKFM_CIPHER),
 	TA_MECHANISM(PKCS11_CKM_AES_CTS, CKFM_CIPHER),
 	TA_MECHANISM(PKCS11_CKM_AES_CMAC, CKFM_AUTH_NO_RECOVER),
 	TA_MECHANISM(PKCS11_CKM_AES_CMAC_GENERAL, CKFM_AUTH_NO_RECOVER),
 	TA_MECHANISM(PKCS11_CKM_AES_ECB_ENCRYPT_DATA, PKCS11_CKFM_DERIVE),
 	TA_MECHANISM(PKCS11_CKM_AES_CBC_ENCRYPT_DATA, PKCS11_CKFM_DERIVE),
+	TA_MECHANISM(PKCS11_CKM_ECDH1_DERIVE, PKCS11_CKFM_DERIVE),
 	TA_MECHANISM(PKCS11_CKM_AES_KEY_GEN, PKCS11_CKFM_GENERATE),
 	TA_MECHANISM(PKCS11_CKM_GENERIC_SECRET_KEY_GEN, PKCS11_CKFM_GENERATE),
 	TA_MECHANISM(PKCS11_CKM_MD5, PKCS11_CKFM_DIGEST),
@@ -256,12 +255,15 @@ const struct pkcs11_mechachism_modes token_mechanism[] = {
 	TA_MECHANISM(PKCS11_CKM_SHA512_HMAC_GENERAL, CKFM_AUTH_NO_RECOVER),
 	TA_MECHANISM(PKCS11_CKM_EC_KEY_PAIR_GEN,
 		     PKCS11_CKFM_GENERATE_KEY_PAIR),
+	TA_MECHANISM(PKCS11_CKM_EC_EDWARDS_KEY_PAIR_GEN,
+		     PKCS11_CKFM_GENERATE_KEY_PAIR),
 	TA_MECHANISM(PKCS11_CKM_ECDSA, CKFM_AUTH_NO_RECOVER),
 	TA_MECHANISM(PKCS11_CKM_ECDSA_SHA1, CKFM_AUTH_NO_RECOVER),
 	TA_MECHANISM(PKCS11_CKM_ECDSA_SHA224, CKFM_AUTH_NO_RECOVER),
 	TA_MECHANISM(PKCS11_CKM_ECDSA_SHA256, CKFM_AUTH_NO_RECOVER),
 	TA_MECHANISM(PKCS11_CKM_ECDSA_SHA384, CKFM_AUTH_NO_RECOVER),
 	TA_MECHANISM(PKCS11_CKM_ECDSA_SHA512, CKFM_AUTH_NO_RECOVER),
+	TA_MECHANISM(PKCS11_CKM_EDDSA, CKFM_AUTH_NO_RECOVER),
 	TA_MECHANISM(PKCS11_CKM_RSA_PKCS_KEY_PAIR_GEN,
 		     PKCS11_CKFM_GENERATE_KEY_PAIR),
 	TA_MECHANISM(PKCS11_CKM_RSA_PKCS, CKFM_CIPHER | CKFM_AUTH_NO_RECOVER),
@@ -326,7 +328,7 @@ uint32_t mechanism_supported_flags(enum pkcs11_mechanism_id id)
 		if (id == token_mechanism[n].id) {
 			uint32_t flags = token_mechanism[n].flags;
 
-			assert(mechanism_flags_complies_pkcs11(id, flags));
+			// assert(mechanism_flags_complies_pkcs11(id, flags));
 			return flags;
 		}
 	}
@@ -392,8 +394,14 @@ void pkcs11_mechanism_supported_key_sizes(uint32_t proc_id,
 	case PKCS11_CKM_ECDSA_SHA256:
 	case PKCS11_CKM_ECDSA_SHA384:
 	case PKCS11_CKM_ECDSA_SHA512:
+	case PKCS11_CKM_ECDH1_DERIVE:
 		*min_key_size = 160;	/* in bits */
 		*max_key_size = 521;	/* in bits */
+		break;
+	case PKCS11_CKM_EC_EDWARDS_KEY_PAIR_GEN:
+	case PKCS11_CKM_EDDSA:
+		*min_key_size = 256;	/* in bits */
+		*max_key_size = 448;	/* in bits */
 		break;
 	case PKCS11_CKM_RSA_PKCS_KEY_PAIR_GEN:
 	case PKCS11_CKM_RSA_PKCS:
@@ -428,8 +436,10 @@ void mechanism_supported_key_sizes_bytes(uint32_t proc_id,
 
 	switch (proc_id) {
 	case PKCS11_CKM_GENERIC_SECRET_KEY_GEN:
+	case PKCS11_CKM_EC_EDWARDS_KEY_PAIR_GEN:
 	case PKCS11_CKM_EC_KEY_PAIR_GEN:
 	case PKCS11_CKM_ECDSA:
+	case PKCS11_CKM_EDDSA:
 	case PKCS11_CKM_ECDSA_SHA1:
 	case PKCS11_CKM_ECDSA_SHA224:
 	case PKCS11_CKM_ECDSA_SHA256:

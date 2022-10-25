@@ -3,15 +3,13 @@
  * Copyright (c) 2017-2020, Linaro Limited
  */
 
-#include "compiler.h"
-#include "pkcs11_ta.h"
+#include <pkcs11_ta.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include "tee_internal_api.h"
-#include "tee_internal_api_extensions.h"
-//#include <trace.h>
-#include "tee_logging.h"
-#include "util.h"
+#include <tee_internal_api_extensions.h>
+#include <tee_internal_api.h>
+#include <trace.h>
+#include <util.h>
 
 #include "pkcs11_token.h"
 #include "serializer.h"
@@ -94,8 +92,7 @@ enum pkcs11_rc serialargs_get_ptr(struct serialargs *args, void **out,
 	}
 
 	if ((char *)next_end > args->start + args->size) {
-		OT_LOG(LOG_ERR, "arg too short: full %zd, remain %zd, expect %zd",
-		     args->size, args->size - (args->next - args->start), size);
+		EMSG("arg too short: full %zd, remain %zd, expect %zd", args->size, args->size - (args->next - args->start), size);
 		return PKCS11_CKR_ARGUMENTS_BAD;
 	}
 

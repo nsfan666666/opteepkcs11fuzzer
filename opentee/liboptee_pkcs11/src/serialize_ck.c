@@ -4,12 +4,13 @@
  */
 
 
+#include <ck_debug.h>
 #include <inttypes.h>
+#include <pkcs11.h>
+#include <pkcs11_ta.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "pkcs11.h"
-#include "ck_debug.h"
 #include "ck_helpers.h"
 #include "local_utils.h"
 #include "serializer.h"

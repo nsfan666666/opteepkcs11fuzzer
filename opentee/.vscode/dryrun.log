@@ -1,6 +1,0 @@
-make --dry-run --always-make --keep-going --print-directory
-make: Entering directory '/home/sekai/Desktop/github/test_tee/opentee_rere'
-make: Leaving directory '/home/sekai/Desktop/github/test_tee/opentee_rere'
- 
-make: *** No targets specified and no makefile found.  Stop.
-

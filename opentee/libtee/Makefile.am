@@ -4,7 +4,7 @@
 ACLOCAL_AMFLAGS = -I m4
 
 # Additional C compiler flags
-AM_CFLAGS = -Wall -Wextra -Werror -DOT_LOGGING -O0 -g3 -ggdb3
+AM_CFLAGS = -Wall -Wextra -DOT_LOGGING -O0 -g3 -ggdb3 # -Werror # to add while(1)
 
 # Shared libraries
 lib_LTLIBRARIES  =

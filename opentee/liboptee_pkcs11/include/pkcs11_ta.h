@@ -3,6 +3,8 @@
  * Copyright (c) 2018-2020, Linaro Limited
  */
 
+// ? PKCS#11 TA commands ABI (e.g. command id, attributes etc.)
+
 #ifndef PKCS11_TA_H
 #define PKCS11_TA_H
 

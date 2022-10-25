@@ -3,12 +3,12 @@
  * Copyright (c) 2018-2020, Linaro Limited
  */
 
-#include "glob_symb.h"
-#include "pkcs11_ta.h"
+#include <pkcs11_ta.h>
 #include <string.h>
-#include "tee_internal_api.h" // opentee
-#include "tee_api_defines.h"
-#include "util.h"
+#include <tee_internal_api.h>
+#include <util.h>
+#include <tee_api_defines.h> // missing TEE_ERROR_CIPHERTEXT_INVALID
+#include <trace.h>
 
 #include "attributes.h"
 #include "object.h"
@@ -16,11 +16,7 @@
 #include "pkcs11_helpers.h"
 #include "processing.h"
 
-#include "tee_logging.h"
-
-//#define CFG_TEE_TA_LOG_LEVEL 0 // kz
-
-static const char __attribute__((unused)) unknown[] = "<unknown-identifier>";
+static const char __maybe_unused unknown[] = "<unknown-identifier>";
 
 struct attr_size {
 	uint32_t id;
@@ -154,7 +150,7 @@ static const char *id2str(uint32_t id, const struct any_id *table,
 /*
  * TA command IDs: used only as ID/string conversion for debug trace support
  */
-static const struct any_id __attribute__((unused)) string_ta_cmd[] = {
+static const struct any_id __maybe_unused string_ta_cmd[] = {
 	PKCS11_ID(PKCS11_CMD_PING),
 	PKCS11_ID(PKCS11_CMD_SLOT_LIST),
 	PKCS11_ID(PKCS11_CMD_SLOT_INFO),
@@ -210,13 +206,13 @@ static const struct any_id __attribute__((unused)) string_ta_cmd[] = {
 	PKCS11_ID(PKCS11_CMD_UNWRAP_KEY),
 };
 
-static const struct any_id __attribute__((unused)) string_slot_flags[] = {
+static const struct any_id __maybe_unused string_slot_flags[] = {
 	PKCS11_ID(PKCS11_CKFS_TOKEN_PRESENT),
 	PKCS11_ID(PKCS11_CKFS_REMOVABLE_DEVICE),
 	PKCS11_ID(PKCS11_CKFS_HW_SLOT),
 };
 
-static const struct any_id __attribute__((unused)) string_token_flags[] = {
+static const struct any_id __maybe_unused string_token_flags[] = {
 	PKCS11_ID(PKCS11_CKFT_RNG),
 	PKCS11_ID(PKCS11_CKFT_WRITE_PROTECTED),
 	PKCS11_ID(PKCS11_CKFT_LOGIN_REQUIRED),
@@ -237,12 +233,12 @@ static const struct any_id __attribute__((unused)) string_token_flags[] = {
 	PKCS11_ID(PKCS11_CKFT_ERROR_STATE),
 };
 
-static const struct any_id __attribute__((unused)) string_session_flags[] = {
+static const struct any_id __maybe_unused string_session_flags[] = {
 	PKCS11_ID(PKCS11_CKFSS_RW_SESSION),
 	PKCS11_ID(PKCS11_CKFSS_SERIAL_SESSION),
 };
 
-static const struct any_id __attribute__((unused)) string_session_state[] = {
+static const struct any_id __maybe_unused string_session_state[] = {
 	PKCS11_ID(PKCS11_CKS_RO_PUBLIC_SESSION),
 	PKCS11_ID(PKCS11_CKS_RO_USER_FUNCTIONS),
 	PKCS11_ID(PKCS11_CKS_RW_PUBLIC_SESSION),
@@ -250,7 +246,7 @@ static const struct any_id __attribute__((unused)) string_session_state[] = {
 	PKCS11_ID(PKCS11_CKS_RW_SO_FUNCTIONS),
 };
 
-static const struct any_id __attribute__((unused)) string_rc[] = {
+static const struct any_id __maybe_unused string_rc[] = {
 	PKCS11_ID(PKCS11_CKR_OK),
 	PKCS11_ID(PKCS11_CKR_SLOT_ID_INVALID),
 	PKCS11_ID(PKCS11_CKR_GENERAL_ERROR),
@@ -319,7 +315,7 @@ static const struct any_id __attribute__((unused)) string_rc[] = {
 	PKCS11_ID(PKCS11_RV_NOT_IMPLEMENTED),
 };
 
-static const struct any_id __attribute__((unused)) string_class[] = {
+static const struct any_id __maybe_unused string_class[] = {
 	PKCS11_ID(PKCS11_CKO_SECRET_KEY),
 	PKCS11_ID(PKCS11_CKO_PUBLIC_KEY),
 	PKCS11_ID(PKCS11_CKO_PRIVATE_KEY),
@@ -332,7 +328,7 @@ static const struct any_id __attribute__((unused)) string_class[] = {
 	PKCS11_ID(PKCS11_CKO_UNDEFINED_ID)
 };
 
-static const struct any_id __attribute__((unused)) string_key_type[] = {
+static const struct any_id __maybe_unused string_key_type[] = {
 	PKCS11_ID(PKCS11_CKK_AES),
 	PKCS11_ID(PKCS11_CKK_GENERIC_SECRET),
 	PKCS11_ID(PKCS11_CKK_MD5_HMAC),
@@ -342,11 +338,13 @@ static const struct any_id __attribute__((unused)) string_key_type[] = {
 	PKCS11_ID(PKCS11_CKK_SHA384_HMAC),
 	PKCS11_ID(PKCS11_CKK_SHA512_HMAC),
 	PKCS11_ID(PKCS11_CKK_EC),
+	PKCS11_ID(PKCS11_CKK_EC_EDWARDS),
+	PKCS11_ID(PKCS11_CKK_EDDSA),
 	PKCS11_ID(PKCS11_CKK_RSA),
 	PKCS11_ID(PKCS11_CKK_UNDEFINED_ID)
 };
 
-static const struct any_id __attribute__((unused)) string_certificate_type[] = {
+static const struct any_id __maybe_unused string_certificate_type[] = {
 	PKCS11_ID(PKCS11_CKC_X_509),
 	PKCS11_ID(PKCS11_CKC_X_509_ATTR_CERT),
 	PKCS11_ID(PKCS11_CKC_WTLS),
@@ -357,11 +355,11 @@ static const struct any_id __attribute__((unused)) string_certificate_type[] = {
  * Processing IDs not exported in the TA API.
  * PKCS11_CKM_* mechanism IDs are looked up from mechanism_string_id().
  */
-static const struct any_id __attribute__((unused)) string_internal_processing[] = {
+static const struct any_id __maybe_unused string_internal_processing[] = {
 	PKCS11_ID(PKCS11_PROCESSING_IMPORT),
 };
 
-static const struct any_id __attribute__((unused)) string_functions[] = {
+static const struct any_id __maybe_unused string_functions[] = {
 	PKCS11_ID(PKCS11_FUNCTION_DIGEST),
 	PKCS11_ID(PKCS11_FUNCTION_IMPORT),
 	PKCS11_ID(PKCS11_FUNCTION_ENCRYPT),
@@ -501,6 +499,7 @@ bool key_type_is_asymm_key(uint32_t id)
 
 	switch (key_type) {
 	case PKCS11_CKK_EC:
+	case PKCS11_CKK_EC_EDWARDS:
 	case PKCS11_CKK_RSA:
 		return true;
 	default:
@@ -565,7 +564,7 @@ bool pkcs2tee_load_attr(TEE_Attribute *tee_ref, uint32_t tee_id,
 	case TEE_ATTR_ECC_CURVE:
 		if (get_attribute_ptr(obj->attributes, PKCS11_CKA_EC_PARAMS,
 				      &a_ptr, &a_size) || !a_ptr) {
-			OT_LOG(LOG_ERR, "Missing EC_PARAMS attribute");
+			EMSG("Missing EC_PARAMS attribute");
 			return false;
 		}
 
@@ -586,14 +585,14 @@ bool pkcs2tee_load_attr(TEE_Attribute *tee_ref, uint32_t tee_id,
 			 * during object import.
 			 */
 
-			OT_LOG(LOG_ERR, "Missing EC_POINT attribute");
+			EMSG("Missing EC_POINT attribute");
 			return false;
 		}
 
 		der_ptr = (uint8_t *)a_ptr;
 
 		if (der_ptr[0] != 0x04) {
-			OT_LOG(LOG_ERR, "Unsupported DER type");
+			EMSG("Unsupported DER type");
 			return false;
 		}
 
@@ -606,22 +605,22 @@ bool pkcs2tee_load_attr(TEE_Attribute *tee_ref, uint32_t tee_id,
 			qsize = der_ptr[2];
 			hsize = 3 /* der */ + 1 /* point compression */;
 		} else {
-			OT_LOG(LOG_ERR, "Unsupported DER long form");
+			EMSG("Unsupported DER long form");
 			return false;
 		}
 
 		if (der_ptr[hsize - 1] != 0x04) {
-			OT_LOG(LOG_ERR, "Unsupported EC_POINT compression");
+			EMSG("Unsupported EC_POINT compression");
 			return false;
 		}
 
 		if (a_size != (hsize - 1) + qsize) {
-			OT_LOG(LOG_ERR, "Invalid EC_POINT attribute");
+			EMSG("Invalid EC_POINT attribute");
 			return false;
 		}
 
 		if (a_size != hsize + 2 * data32) {
-			OT_LOG(LOG_ERR, "Invalid EC_POINT attribute");
+			EMSG("Invalid EC_POINT attribute");
 			return false;
 		}
 
@@ -651,12 +650,13 @@ bool pkcs2tee_load_attr(TEE_Attribute *tee_ref, uint32_t tee_id,
  * Initialize a TEE attribute with hash of a target PKCS11 TA attribute
  * in an object.
  */
+// ! ### enum pkcs11_rc pkcs2tee_load_hashed_attr(TEE_Attribute *tee_ref, uint32_t tee_id, struct pkcs11_object *obj, enum pkcs11_attr_id pkcs11_id, uint32_t tee_algo, void *hash_ptr, uint32_t *hash_size)
 enum pkcs11_rc pkcs2tee_load_hashed_attr(TEE_Attribute *tee_ref,
 					 uint32_t tee_id,
 					 struct pkcs11_object *obj,
 					 enum pkcs11_attr_id pkcs11_id,
 					 uint32_t tee_algo, void *hash_ptr,
-					 uint32_t *hash_size)
+					 size_t *hash_size)
 {
 	TEE_OperationHandle handle = TEE_HANDLE_NULL;
 	void *a_ptr = NULL;
@@ -670,14 +670,14 @@ enum pkcs11_rc pkcs2tee_load_hashed_attr(TEE_Attribute *tee_ref,
 
 	res = TEE_AllocateOperation(&handle, tee_algo, TEE_MODE_DIGEST, 0);
 	if (res) {
-		OT_LOG(LOG_ERR, "TEE_AllocateOperation() failed %#"PRIx32, tee_algo);
+		EMSG("TEE_AllocateOperation() failed %#"PRIx32, tee_algo);
 		return tee2pkcs_error(res);
 	}
 
 	res = TEE_DigestDoFinal(handle, a_ptr, a_size, hash_ptr, hash_size);
-	//TEE_FreeOperation(handle);
+	TEE_FreeOperation(handle);
 	if (res) {
-		OT_LOG(LOG_ERR, "TEE_DigestDoFinal() failed %#"PRIx32, tee_algo);
+		EMSG("TEE_DigestDoFinal() failed %#"PRIx32, tee_algo);
 		return PKCS11_CKR_FUNCTION_FAILED;
 	}
 

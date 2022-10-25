@@ -34,10 +34,6 @@
 #include "opentee_internal_api.h"
 #include "tee_time_api.h"
 
-// ! kz: GP 1.2 (OP-TEE) TEE_ReadObjectData(TEE_ObjectHandle, void *, size_t, size_t *) vs GP 1.3 (Open-TEE) GP 1.2 TEE_ReadObjectData(TEE_ObjectHandle, void *, size_t, uint32_t *)
-// kz: size_t is 64-bit long on 64-bit system = incompatability --> patch Open-TEE after OP-TEE
-// example of problem: SEGV occurs when init_persistent_db in persistent_token.c (OP-TEE) calls TEE_ReadObjectData in data_stream_api.c in (Open-TEE)
-
 TEE_Result TEE_ReadObjectData(TEE_ObjectHandle object,
 			      void *buffer,
 			      size_t size,

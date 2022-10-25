@@ -5,8 +5,8 @@
 #ifndef LIBCKTEEC_SERIALIZER_H
 #define LIBCKTEEC_SERIALIZER_H
 
-#include "pkcs11.h"
-#include "pkcs11_ta.h"
+#include <pkcs11.h>
+#include <pkcs11_ta.h>
 #include <stddef.h>
 #include <stdint.h>
 

@@ -6,9 +6,9 @@
 #ifndef PKCS11_TA_OBJECT_H
 #define PKCS11_TA_OBJECT_H
 
-#include "pkcs11_ta.h"
+#include <pkcs11_ta.h>
 #include <sys/queue.h>
-#include "tee_internal_api.h"
+#include <tee_internal_api.h>
 
 struct ck_token;
 struct obj_attrs;

@@ -3,21 +3,19 @@
  * Copyright (c) 2017-2020, Linaro Limited
  */
 
-#include "glob_symb.h"
 #include <assert.h>
-//#include <config.h>
-#include "confine_array_index.h"
-#include "pkcs11_ta.h"
-//#include "printk.h"
-#include "../../tests/internal_api/print_functions.h"
-//#include <pta_system.h>
+#include <local_utils.h> // COMPILE_TIME_ASSERT missing from assert.h
+#include <config.h>
+#include <confine_array_index.h>
+#include <pkcs11_ta.h>
+#include <printk.h>
+#include <pta_system.h>
 #include <string.h>
-#include "string_ext.h"
-#include "queue.h"
-//#include "tee_api_types.h" 
-#include "tee_internal_api.h" // opentee
-#include "tee_internal_api_extensions.h"
-#include "util.h"
+#include <string_ext.h>
+#include <sys/queue.h>
+#include <tee_api_types.h>
+#include <tee_internal_api_extensions.h>
+#include <util.h>
 
 #include "attributes.h"
 #include "handle.h"
@@ -26,8 +24,6 @@
 #include "processing.h"
 #include "serializer.h"
 #include "token_capabilities.h"
-
-#include "tee_logging.h"
 
 /* Number of tokens implemented by the TA. Token ID is the token index */
 #define TOKEN_COUNT		CFG_PKCS11_TA_TOKEN_COUNT
@@ -122,7 +118,7 @@ void unregister_client(struct pkcs11_client *client)
 	struct pkcs11_session *next = NULL;
 
 	if (!client) {
-		OT_LOG(LOG_ERR, "Invalid TEE session handle");
+		EMSG("Invalid TEE session handle");
 		return;
 	}
 
@@ -154,27 +150,7 @@ static TEE_Result pkcs11_token_init(unsigned int id)
 
 TEE_Result pkcs11_init(void)
 {
-
-if ((getenv("BUG"))) {
-	
-	OT_LOG(LOG_DEBUG, "############### REACHED BUG ###############");
-	unsigned char invalid_read = *(unsigned char*)0x00000000;
-	unsigned int dummy = 0;
-	printf("test: %d", *((&dummy)+4));
-
-	//  // allocating memory to p
-    // int* p = malloc(8);
-    // *p = 100;    
-    // // deallocated the space allocated to p
-    // free(p);
-    // // core dump/segmentation fault
-    // //  as now this statement is illegal
-    // *p = 110;
-	
-}
-
 	unsigned int id = 0;
-
 	TEE_Result ret = TEE_ERROR_GENERIC;
 
 	for (id = 0; id < TOKEN_COUNT; id++) {
@@ -298,31 +274,28 @@ static void pad_str(uint8_t *str, size_t size)
 
 static void set_token_description(struct pkcs11_slot_info *info)
 {
-	// kz commented out since TEE_GetPropertyAsUUID is missing in open-tee, and the function is not an interesting fuzzing target
-	
-	/*
 	char desc[sizeof(info->slot_description) + 1] = { 0 };
 	TEE_UUID dev_id = { };
 	TEE_Result res = TEE_ERROR_GENERIC;
 	int n = 0;
 
-	res = TEE_GetPropertyAsUUID(TEE_PROPSET_TEE_IMPLEMENTATION,
-				    "gpd.tee.deviceID", &dev_id);
+	// ! NOT SUPPORTED: Open-TEE doesnt provide TEE_GetPropertyAsUUID (utee syscalls use OP-TEE svc)
+	// res = TEE_GetPropertyAsUUID(TEE_PROPSET_TEE_IMPLEMENTATION,
+	// 			    "gpd.tee.deviceID", &dev_id);
+
 	if (res == TEE_SUCCESS) {
-		n = snprintk(desc, sizeof(desc), PKCS11_SLOT_DESCRIPTION
+		n = snprintf(desc, sizeof(desc), PKCS11_SLOT_DESCRIPTION
 			     " - TEE UUID %pUl", (void *)&dev_id);
 	} else {
 		n = snprintf(desc, sizeof(desc), PKCS11_SLOT_DESCRIPTION
-			     " - No TEE UUID");
+			     " - No TEE UUID"); // ! changed from snprintk to snprintf
 	}
+
 	if (n < 0 || n >= (int)sizeof(desc))
 		TEE_Panic(0);
 
 	TEE_MemMove(info->slot_description, desc, n);
 	pad_str(info->slot_description, sizeof(info->slot_description));
-	*/
-
-	OT_LOG(LOG_ERR, "NOT IMPLEMENTED");
 }
 
 enum pkcs11_rc entry_ck_slot_info(uint32_t ptypes, TEE_Param *params)
@@ -344,10 +317,10 @@ enum pkcs11_rc entry_ck_slot_info(uint32_t ptypes, TEE_Param *params)
 		.firmware_version = PKCS11_SLOT_FW_VERSION,
 	};
 
-	//COMPILE_TIME_ASSERT(sizeof(PKCS11_SLOT_DESCRIPTION) <=
-	//		    sizeof(info.slot_description));
-	//COMPILE_TIME_ASSERT(sizeof(PKCS11_SLOT_MANUFACTURER) <=
-	//		    sizeof(info.manufacturer_id));
+	COMPILE_TIME_ASSERT(sizeof(PKCS11_SLOT_DESCRIPTION) <=
+			    sizeof(info.slot_description));
+	COMPILE_TIME_ASSERT(sizeof(PKCS11_SLOT_MANUFACTURER) <=
+			    sizeof(info.manufacturer_id));
 
 	if (ptypes != exp_pt || out->memref.size != sizeof(info))
 		return PKCS11_CKR_ARGUMENTS_BAD;
@@ -441,18 +414,18 @@ enum pkcs11_rc entry_ck_token_info(uint32_t ptypes, TEE_Param *params)
 	return PKCS11_CKR_OK;
 }
 
-static void printf_print_supported_mechanism(unsigned int token_id __attribute__((unused)),
-					   uint32_t *array __attribute__((unused)),
-					   size_t count __attribute__((unused)))
+static void dmsg_print_supported_mechanism(unsigned int token_id __maybe_unused,
+					   uint32_t *array __maybe_unused,
+					   size_t count __maybe_unused)
 {
-	size_t __attribute__((unused)) n = 0;
+	size_t __maybe_unused n = 0;
 
 	if (TRACE_LEVEL < TRACE_DEBUG)
 		return;
 
 	for (n = 0; n < count; n++)
-		; //printf("PKCS11 token %"PRIu32": mechanism 0x%04"PRIx32": %s",
-		     //token_id, array[n], id2str_mechanism(array[n]));
+		DMSG("PKCS11 token %"PRIu32": mechanism 0x%04"PRIx32": %s",
+		     token_id, array[n], id2str_mechanism(array[n]));
 }
 
 enum pkcs11_rc entry_ck_token_mecha_ids(uint32_t ptypes, TEE_Param *params)
@@ -466,7 +439,7 @@ enum pkcs11_rc entry_ck_token_mecha_ids(uint32_t ptypes, TEE_Param *params)
 	enum pkcs11_rc rc = PKCS11_CKR_OK;
 	struct serialargs ctrlargs = { };
 	uint32_t token_id = 0;
-	struct ck_token __attribute__((unused)) *token = NULL;
+	struct ck_token __maybe_unused *token = NULL;
 	size_t count = 0;
 	uint32_t *array = NULL;
 
@@ -501,7 +474,7 @@ enum pkcs11_rc entry_ck_token_mecha_ids(uint32_t ptypes, TEE_Param *params)
 	if (!array)
 		return PKCS11_CKR_DEVICE_MEMORY;
 
-	printf_print_supported_mechanism(token_id, array, count);
+	dmsg_print_supported_mechanism(token_id, array, count);
 
 	out->memref.size = count * sizeof(*array);
 	TEE_MemMove(out->memref.buffer, array, out->memref.size);
@@ -556,8 +529,8 @@ enum pkcs11_rc entry_ck_token_mecha_info(uint32_t ptypes, TEE_Param *params)
 
 	TEE_MemMove(out->memref.buffer, &info, sizeof(info));
 
-	//printf("PKCS11 token %"PRIu32": mechanism 0x%"PRIx32" info",
-	     //token_id, type);
+	DMSG("PKCS11 token %"PRIu32": mechanism 0x%"PRIx32" info",
+	     token_id, type);
 
 	return PKCS11_CKR_OK;
 }
@@ -697,7 +670,7 @@ enum pkcs11_rc entry_ck_open_session(struct pkcs11_client *client,
 	TEE_MemMove(out->memref.buffer, &session->handle,
 		    sizeof(session->handle));
 
-	//printf("Open PKCS11 session %"PRIu32, session->handle);
+	DMSG("Open PKCS11 session %"PRIu32, session->handle);
 
 	return PKCS11_CKR_OK;
 }
@@ -719,9 +692,9 @@ static void close_ck_session(struct pkcs11_session *session)
 	if (pkcs11_session_is_read_write(session))
 		session->token->rw_session_count--;
 
-	TEE_Free(session);
+	DMSG("Close PKCS11 session %"PRIu32, session->handle);
 
-	//printf("Close PKCS11 session %"PRIu32, session->handle);
+	TEE_Free(session);
 }
 
 enum pkcs11_rc entry_ck_close_session(struct pkcs11_client *client,
@@ -784,7 +757,7 @@ enum pkcs11_rc entry_ck_close_all_sessions(struct pkcs11_client *client,
 	if (!token)
 		return PKCS11_CKR_SLOT_ID_INVALID;
 
-	//printf("Close all sessions for PKCS11 token %"PRIu32, token_id);
+	DMSG("Close all sessions for PKCS11 token %"PRIu32, token_id);
 
 	TAILQ_FOREACH_SAFE(session, &client->session_list, link, next)
 		if (session->token == token)
@@ -828,15 +801,13 @@ enum pkcs11_rc entry_ck_session_info(struct pkcs11_client *client,
 
 	TEE_MemMove(out->memref.buffer, &info, sizeof(info));
 
-	//printf("Get find on PKCS11 session %"PRIu32, session->handle);
+	DMSG("Get find on PKCS11 session %"PRIu32, session->handle);
 
 	return PKCS11_CKR_OK;
 }
 
-#include "tee_logging.h"
 enum pkcs11_rc entry_ck_token_initialize(uint32_t ptypes, TEE_Param *params)
 {
-	OT_LOG(LOG_ERR, "entry_ck_token_initialize Inside here!\n");
 	const uint32_t exp_pt = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INOUT,
 						TEE_PARAM_TYPE_NONE,
 						TEE_PARAM_TYPE_NONE,
@@ -857,7 +828,6 @@ enum pkcs11_rc entry_ck_token_initialize(uint32_t ptypes, TEE_Param *params)
 		return PKCS11_CKR_ARGUMENTS_BAD;
 
 	serialargs_init(&ctrlargs, ctrl->memref.buffer, ctrl->memref.size);
-	OT_LOG(LOG_ERR, "entry_ck_token_initialize Inside here 2\n");
 
 	rc = serialargs_get(&ctrlargs, &token_id, sizeof(uint32_t));
 	if (rc)
@@ -877,25 +847,21 @@ enum pkcs11_rc entry_ck_token_initialize(uint32_t ptypes, TEE_Param *params)
 
 	if (serialargs_remaining_bytes(&ctrlargs))
 		return PKCS11_CKR_ARGUMENTS_BAD;
-	OT_LOG(LOG_ERR, "entry_ck_token_initialize Inside here 3\n");
 
 	token = get_token(token_id);
 	if (!token)
 		return PKCS11_CKR_SLOT_ID_INVALID;
-	OT_LOG(LOG_ERR, "entry_ck_token_initialize Inside here 4\n");
 
 	if (token->db_main->flags & PKCS11_CKFT_SO_PIN_LOCKED) {
-		OT_LOG(LOG_INFO, "Token %"PRIu32": SO PIN locked", token_id);
+		IMSG("Token %"PRIu32": SO PIN locked", token_id);
 		return PKCS11_CKR_PIN_LOCKED;
 	}
-	OT_LOG(LOG_ERR, "entry_ck_token_initialize Inside here 5\n");
 
 	/* Check there's no open session on this token */
 	TAILQ_FOREACH(client, &pkcs11_client_list, link)
 		TAILQ_FOREACH(sess, &client->session_list, link)
 			if (sess->token == token)
 				return PKCS11_CKR_SESSION_EXISTS;
-	OT_LOG(LOG_ERR, "entry_ck_token_initialize Inside here 6\n");
 
 #if defined(CFG_PKCS11_TA_AUTH_TEE_IDENTITY)
 	/* Check TEE Identity based authentication if enabled */
@@ -904,7 +870,6 @@ enum pkcs11_rc entry_ck_token_initialize(uint32_t ptypes, TEE_Param *params)
 		if (rc)
 			return rc;
 	}
-	OT_LOG(LOG_ERR, "entry_ck_token_initialize Inside here 7\n");
 
 	/* Detect TEE Identity based ACL usage activation with NULL PIN */
 	if (!pin) {
@@ -919,7 +884,6 @@ enum pkcs11_rc entry_ck_token_initialize(uint32_t ptypes, TEE_Param *params)
 			~PKCS11_CKFT_PROTECTED_AUTHENTICATION_PATH;
 	}
 #endif /* CFG_PKCS11_TA_AUTH_TEE_IDENTITY */
-	OT_LOG(LOG_ERR, "entry_ck_token_initialize Inside here 8\n");
 
 	if (!token->db_main->so_pin_salt) {
 		/*
@@ -927,21 +891,13 @@ enum pkcs11_rc entry_ck_token_initialize(uint32_t ptypes, TEE_Param *params)
 		 * PKCS11_CKR_PIN_LEN_RANGE for this function, take another
 		 * error code.
 		 */
-	OT_LOG(LOG_ERR, "entry_ck_token_initialize Inside here 9\n");
-
 		if (pin_size < PKCS11_TOKEN_PIN_SIZE_MIN ||
-		    pin_size > PKCS11_TOKEN_PIN_SIZE_MAX) {
-					OT_LOG(LOG_ERR, "entry_ck_token_initialize Inside here 9b\n");
-
+		    pin_size > PKCS11_TOKEN_PIN_SIZE_MAX)
 			return PKCS11_CKR_ARGUMENTS_BAD;
-		}
-	OT_LOG(LOG_ERR, "entry_ck_token_initialize Inside here 10\n");
 
 		rc = hash_pin(PKCS11_CKU_SO, pin, pin_size,
 			      &token->db_main->so_pin_salt,
 			      token->db_main->so_pin_hash);
-	OT_LOG(LOG_ERR, "entry_ck_token_initialize Inside here 11\n");
-
 		if (rc)
 			return rc;
 
@@ -1003,7 +959,7 @@ inited:
 		cleanup_persistent_object(obj, token);
 	}
 
-	OT_LOG(LOG_INFO, "PKCS11 token %"PRIu32": initialized", token_id);
+	IMSG("PKCS11 token %"PRIu32": initialized", token_id);
 
 	return PKCS11_CKR_OK;
 }
@@ -1115,7 +1071,7 @@ enum pkcs11_rc entry_ck_init_pin(struct pkcs11_client *client,
 
 	assert(session->token->db_main->flags & PKCS11_CKFT_TOKEN_INITIALIZED);
 
-	OT_LOG(LOG_INFO, "PKCS11 session %"PRIu32": init PIN", session->handle);
+	IMSG("PKCS11 session %"PRIu32": init PIN", session->handle);
 
 	return set_pin(session, pin, pin_size, PKCS11_CKU_USER);
 }
@@ -1293,7 +1249,7 @@ enum pkcs11_rc entry_ck_set_pin(struct pkcs11_client *client,
 		if (rc)
 			return rc;
 
-		OT_LOG(LOG_INFO, "PKCS11 session %"PRIu32": set PIN", session->handle);
+		IMSG("PKCS11 session %"PRIu32": set PIN", session->handle);
 
 		return set_pin(session, pin, pin_size, PKCS11_CKU_SO);
 	}
@@ -1306,7 +1262,7 @@ enum pkcs11_rc entry_ck_set_pin(struct pkcs11_client *client,
 	if (rc)
 		return rc;
 
-	OT_LOG(LOG_INFO, "PKCS11 session %"PRIu32": set PIN", session->handle);
+	IMSG("PKCS11 session %"PRIu32": set PIN", session->handle);
 
 	return set_pin(session, pin, pin_size, PKCS11_CKU_USER);
 }
@@ -1490,7 +1446,7 @@ enum pkcs11_rc entry_ck_login(struct pkcs11_client *client,
 	}
 
 	if (!rc)
-		OT_LOG(LOG_INFO, "PKCS11 session %"PRIu32": login", session->handle);
+		IMSG("PKCS11 session %"PRIu32": login", session->handle);
 
 	return rc;
 }
@@ -1524,7 +1480,7 @@ enum pkcs11_rc entry_ck_logout(struct pkcs11_client *client,
 
 	session_logout(session);
 
-	OT_LOG(LOG_INFO, "PKCS11 session %"PRIu32": logout", session->handle);
+	IMSG("PKCS11 session %"PRIu32": logout", session->handle);
 
 	return PKCS11_CKR_OK;
 }
@@ -1547,7 +1503,7 @@ static TEE_Result seed_rng_pool(void *seed, size_t length)
 	res = TEE_OpenTASession(&system_uuid, TEE_TIMEOUT_INFINITE, 0, NULL,
 				&sess, &ret_orig);
 	if (res != TEE_SUCCESS) {
-		OT_LOG(LOG_ERR, "Can't open session to system PTA");
+		EMSG("Can't open session to system PTA");
 		return res;
 	}
 
@@ -1555,7 +1511,7 @@ static TEE_Result seed_rng_pool(void *seed, size_t length)
 				  PTA_SYSTEM_ADD_RNG_ENTROPY,
 				  param_types, params, &ret_orig);
 	if (res != TEE_SUCCESS)
-		OT_LOG(LOG_ERR, "Can't invoke system PTA");
+		EMSG("Can't invoke system PTA");
 
 	TEE_CloseTASession(sess);
 	return res;
@@ -1578,7 +1534,6 @@ enum pkcs11_rc entry_ck_seed_random(struct pkcs11_client *client,
 	if (!client || ptypes != exp_pt)
 		return PKCS11_CKR_ARGUMENTS_BAD;
 
-	OT_LOG(LOG_ERR, "entry_ck_seed_random 1");
 	serialargs_init(&ctrlargs, ctrl->memref.buffer, ctrl->memref.size);
 
 	rc = serialargs_get_session_from_handle(&ctrlargs, client, &session);
@@ -1593,16 +1548,12 @@ enum pkcs11_rc entry_ck_seed_random(struct pkcs11_client *client,
 
 	if (!in->memref.size)
 		return PKCS11_CKR_OK;
-	OT_LOG(LOG_ERR, "entry_ck_seed_random 2");
 
 	res = seed_rng_pool(in->memref.buffer, in->memref.size);
-		OT_LOG(LOG_ERR, "entry_ck_seed_random 3");
-
 	if (res != TEE_SUCCESS)
 		return PKCS11_CKR_FUNCTION_FAILED;
-	OT_LOG(LOG_ERR, "entry_ck_seed_random 4");
 
-	//printf("PKCS11 session %"PRIu32": seed random", session->handle);
+	DMSG("PKCS11 session %"PRIu32": seed random", session->handle);
 
 	return PKCS11_CKR_OK;
 }
@@ -1660,7 +1611,7 @@ enum pkcs11_rc entry_ck_generate_random(struct pkcs11_client *client,
 		left -= count;
 	}
 
-	//printf("PKCS11 session %"PRIu32": generate random", session->handle);
+	DMSG("PKCS11 session %"PRIu32": generate random", session->handle);
 
 	TEE_Free(buffer);
 

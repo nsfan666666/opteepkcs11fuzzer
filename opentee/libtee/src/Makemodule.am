@@ -11,11 +11,12 @@ libtee_la_includes = \
 # Target specific variables
 libtee_la_SOURCES = \
 	src/com_protocol.c \
-	src/tee_client_api.c
+	src/tee_client_api.c \
+	src/corpus.c
 
 libtee_la_CFLAGS = ${AM_CFLAGS} \
 	-iquote $(top_srcdir)/include \
-	-iquote $(top_srcdir)/src
+	-iquote $(top_srcdir)/src 
 
 libtee_la_LDFLAGS = ${AM_LDFLAGS} \
 	-version-info 0:0:0

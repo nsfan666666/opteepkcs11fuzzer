@@ -22,7 +22,8 @@
 
 #include "tee_shared_data_types.h"
 
-// *
+// ! added missing type in xtest (from OP-TEE tee_client_api.h)
+#define TEEC_ERROR_EXTERNAL_CANCEL         0xFFFF0011
 
 
 /* clang-format off */
@@ -239,10 +240,10 @@ void TEEC_RequestCancellation(TEEC_Operation *operation);
 #define TEEC_PARAM_TYPE_GET(paramsType, index) (((paramsType) >> (index * 4)) & 0xF)
 
 // *
-void write_corpus_entry(void *data, size_t data_sz);
+// void write_corpus_entry(void *data, size_t data_sz);
 
-void create_corpus_entry(void *data, size_t data_sz, int cmd);
+// void create_corpus_entry(void *data, size_t data_sz, int cmd);
 
-void print_corpus_entries_info();
+// void print_corpus_entries_info();
 
 #endif

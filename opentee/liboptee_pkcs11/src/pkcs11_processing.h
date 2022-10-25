@@ -6,8 +6,8 @@
 #ifndef LIBCKTEEC_PKCS11_PROCESSING_H
 #define LIBCKTEEC_PKCS11_PROCESSING_H
 
-#include "pkcs11.h"
-#include "pkcs11_ta.h"
+#include <pkcs11.h>
+#include <pkcs11_ta.h>
 
 CK_RV ck_create_object(CK_SESSION_HANDLE session, CK_ATTRIBUTE_PTR attribs,
 		       CK_ULONG count, CK_OBJECT_HANDLE_PTR phObject);

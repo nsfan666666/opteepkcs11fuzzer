@@ -1,24 +1,28 @@
 //// #include <cryptoki.h>
-#include "pkcs11.h" // cryptoki API 
-#include <stdint.h> // some basic types and macros
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
+// #include "pkcs11.h" // cryptoki API 
+// #include <stdint.h> // some basic types and macros
+// #include <stdlib.h>
+// #include <stdio.h>
+// #include <string.h>
 
-#include <limits.h> // for PATH_MAX
-#include <sys/types.h> // pid_t
-#include <unistd.h> // for STDIN_FILENO, fork, clone...
-#include <errno.h>
-#include <fcntl.h>
+// #include <limits.h> // for PATH_MAX
+// #include <sys/types.h> // pid_t
+// #include <unistd.h> // for STDIN_FILENO, fork, clone...
+// #include <errno.h>
+// #include <fcntl.h>
 
+// #include <stdbool.h> // bool
+// #include <string.h> // memmem
+
+// #include "invoke_ta.h" // CKTEEC_SHM_INOUT, ckteec_alloc_shm
+// #include "tee_client_api.h" // TEEC_XXX, CK_XXX
+// #include "pkcs11_ta.h" // libdump
 #include <pthread.h> // PTHREAD_MUTEX_INITIALIZER
-#include <stdbool.h> // bool
-#include <string.h> // memmem
+#include <pkcs11_token.h> // pkcs11 client library help functions
 
-#include "invoke_ta.h" // CKTEEC_SHM_INOUT, ckteec_alloc_shm
-#include "tee_client_api.h" // TEEC_XXX, CK_XXX
-#include "pkcs11_ta.h" // libdump
-//// #include "local_utils.h" // ARRAY_SIZE
+#include "local_utils.h" // ARRAY_SIZE
+// #include "print_functions.h" // PRI(str, ...) 
+#define PRI_FAIL(msg, ...) printf(msg "\n",__VA_ARGS__) // use printf instead of syslog
 
 #ifndef __AFL_FUZZ_TESTCASE_LEN
   ssize_t fuzz_len;
@@ -36,109 +40,88 @@ __AFL_COVERAGE(); // ! required for selective instrumentation feature to work
 
 #define INPUT_SIZE 128 // fixed size buffer based on assumption about the max size that is likely to exercise all parts of the target function
 
-#ifndef NULL_PTR
-#define NULL_PTR 0
-#endif
-
-#define PRI(str, ...)       printf("%s : " str "\n",  __func__, ##__VA_ARGS__);
-#define PRI_OK(str, ...)    printf(" [OK] : %s : " str "\n",  __func__, ##__VA_ARGS__);
-#define PRI_YES(str, ...)   printf(" YES? : %s : " str "\n",  __func__, ##__VA_ARGS__);
-#define PRI_FAIL(str, ...)  printf("FAIL  : %s : " str "\n",  __func__, ##__VA_ARGS__);
-#define PRI_ABORT(str, ...) printf("ABORT!: %s : " str "\n",  __func__, ##__VA_ARGS__);
-
-
-
-
-// ! Print buffer in hexdump -C format
-
-void print_hex(void *buf, size_t buf_sz)
-{
-	size_t i;
-	for (i = 1; i <= buf_sz; ++i) {
-  		printf("%02x ", ((uint8_t*) buf)[i-1]);
-
-		if (i == 0) 
-			continue;
-
-		if (i % 8 == 0)
-			printf(" ");
-
-		if (i % 16 == 0)
-			printf("\n");
-	}
-	printf("\n");
-}
-
-
-
-
 
 /** ============================== xtest =============================== **/
 
 /*
- * Macros and structs
- * ==================
+ * Some PKCS#11 object resources used in the invocations
  */
-
-
-struct ta_context {
-	pthread_mutex_t init_mutex;
-	bool initiated;
-	TEEC_Context context;
-	TEEC_Session session;
-};
-
-static struct ta_context ta_ctx = {
-	.init_mutex = PTHREAD_MUTEX_INITIALIZER,
-};
-
 static const CK_BYTE cktest_aes128_key[16];
 
-static CK_ATTRIBUTE cktest_token_object[] = {
-	{ CKA_DECRYPT,	&(CK_BBOOL){CK_TRUE}, sizeof(CK_BBOOL) },
-	{ CKA_TOKEN,	&(CK_BBOOL){CK_TRUE}, sizeof(CK_BBOOL) },
-	{ CKA_MODIFIABLE, &(CK_BBOOL){CK_TRUE}, sizeof(CK_BBOOL) },
-	{ CKA_CLASS,	&(CK_OBJECT_CLASS){CKO_SECRET_KEY},
-						sizeof(CK_OBJECT_CLASS) },
-	{ CKA_KEY_TYPE,	&(CK_KEY_TYPE){CKK_AES}, sizeof(CK_KEY_TYPE) },
-	{ CKA_VALUE,	(void *)cktest_aes128_key, sizeof(cktest_aes128_key) },
+// static const CK_BYTE cktest_aes128_iv[16];
+
+/* HMACSHA256 (NIST) */
+uint8_t hmacsha256key[] = "\xc1\xd6\x08\x14\x37\x6a\xae\x39\xc4\x11\x12\x46\x35\x34\x85\x95"
+		"\x8f\x95\x55\x8f\xa3\x8f\xfc\x14\xe4\xa0\x98\x1d\x76\x24\x9b\x9f"
+		"\x87\x63\xc4\xb3\xe2\xce\x4e\xf5";
+
+// Supports: encrypt, decrypt, wrap, unwrap
+// static CK_MECHANISM cktest_aes_cbc_mechanism = {
+// 	CKM_AES_CBC,
+// 	(CK_BYTE_PTR)cktest_aes128_iv, sizeof(cktest_aes128_iv),
+// };
+
+// Supports: key generation (a AES key generation mechanism)
+static CK_MECHANISM cktest_aes_keygen_mechanism = {
+	CKM_AES_KEY_GEN, NULL, 0,
 };
 
-static CK_ATTRIBUTE cktest_session_object[] = {
-	{ CKA_DECRYPT,	&(CK_BBOOL){CK_TRUE}, sizeof(CK_BBOOL) },
-	{ CKA_TOKEN,	&(CK_BBOOL){CK_FALSE}, sizeof(CK_BBOOL) },
-	{ CKA_MODIFIABLE, &(CK_BBOOL){CK_TRUE}, sizeof(CK_BBOOL) },
-	{ CKA_KEY_TYPE,	&(CK_KEY_TYPE){CKK_AES}, sizeof(CK_KEY_TYPE) },
-	{ CKA_CLASS,	&(CK_OBJECT_CLASS){CKO_SECRET_KEY},
-						sizeof(CK_OBJECT_CLASS) },
-	{ CKA_VALUE,	(void *)cktest_aes128_key, sizeof(cktest_aes128_key) },
+// Supports: sign, verify, digest, key derivation
+static const CK_ULONG cktest_general_mechanism_hmac_len = 8;
+static CK_MECHANISM cktest_hmac_general_sha256_mechanism = {
+	CKM_SHA256_HMAC_GENERAL, (CK_VOID_PTR)&cktest_general_mechanism_hmac_len,
+	sizeof(CK_ULONG),
 };
 
+// static const struct cktest_mac_cases[] = {
+// 	{ .attr_key = cktest_hmac_md5_key, .attr_count = ARRAY_SIZE(cktest_hmac_md5_key), .mechanism = &cktest_hmac_md5_mechanism, .in_incr = 4, .in = mac_data_md5_in1, .in_len = ARRAY_SIZE(mac_data_md5_in1), .out = mac_data_md5_out1, .out_len = ARRAY_SIZE(mac_data_md5_out1), .multiple_incr = 0, }
+// };
 
-#define ARRAY_SIZE(array)	(sizeof(array) / sizeof(array[0]))
+// Basic AES attribute template
+#define CKTEST_AES_KEY \
+	{ CKA_CLASS, &(CK_OBJECT_CLASS){CKO_SECRET_KEY}, sizeof(CK_OBJECT_CLASS) }, \
+	{ CKA_KEY_TYPE, &(CK_KEY_TYPE){CKK_AES}, sizeof(CK_KEY_TYPE) }, \
+	{ CKA_ENCRYPT, &(CK_BBOOL){CK_TRUE}, sizeof(CK_BBOOL) },
 
-/*
- * Utility functions
- * =================
- */
+static CK_ATTRIBUTE ck_test_generate_aes_object_encrypt_decrypt[] = {
+	CKTEST_AES_KEY
+	{ CKA_ENCRYPT, &(CK_BBOOL){CK_TRUE}, sizeof(CK_BBOOL) },
+	{ CKA_DECRYPT, &(CK_BBOOL){CK_TRUE}, sizeof(CK_BBOOL) },
+	{ CKA_VALUE_LEN, &(CK_ULONG){16}, sizeof(CK_ULONG) },
+};
 
-/*
- * Util to print CK_SESSION_INFO objects
- */
-static void print_ck_session_info(CK_SESSION_INFO *session_info) 
-{
-	printf("\n");
-	printf("session_info:\n");
-	printf("\t{slotID=%lu}\n", session_info->slotID);
-	printf("\t{state=%lu}\n", session_info->state);
-	printf("\t{flags=%lu}\n", session_info->flags);
-	printf("\t{ulDeviceError=%lu}\n", session_info->ulDeviceError);
-	printf("\n");
-}
+/* Valid template to generate an all AES purpose key */
+// static CK_ATTRIBUTE cktest_generate_aes_object[] = {
+//	{ CKA_CLASS, &(CK_OBJECT_CLASS){CKO_SECRET_KEY}, sizeof(CK_OBJECT_CLASS) },
+//	{ CKA_KEY_TYPE, &(CK_KEY_TYPE){CKK_AES}, sizeof(CK_KEY_TYPE) },
+//	{ CKA_ENCRYPT, &(CK_BBOOL){CK_TRUE}, sizeof(CK_BBOOL) },
+// 	{ CKA_DECRYPT, &(CK_BBOOL){CK_TRUE}, sizeof(CK_BBOOL) },
+// 	{ CKA_VALUE_LEN, &(CK_ULONG){16}, sizeof(CK_ULONG) },
+// };
+
+/* HMACsha256 */
+static CK_ATTRIBUTE ck_test_import_hmac256_object_sign_verify[] = {
+	{ CKA_CLASS, &(CK_OBJECT_CLASS){CKO_SECRET_KEY}, sizeof(CKO_SECRET_KEY) },
+	{ CKA_KEY_TYPE, &(CK_KEY_TYPE){CKK_GENERIC_SECRET}, sizeof(CK_KEY_TYPE) },
+	{ CKA_VALUE, &hmacsha256key, sizeof(hmacsha256key) },
+	{ CKA_SIGN, &(CK_BBOOL){CK_TRUE}, sizeof(CK_BBOOL) },
+	{ CKA_VERIFY, &(CK_BBOOL){CK_TRUE}, sizeof(CK_BBOOL) },
+	// { CKA_ALLOWED_MECHANISMS, &hmac_allow_mech, sizeof(hmac_allow_mech) }
+};
+
+static CK_ATTRIBUTE ck_test_generate_aes_object_sign_verify[] = {
+	CKTEST_AES_KEY
+	{ CKA_ENCRYPT, &(CK_BBOOL){CK_TRUE}, sizeof(CK_BBOOL) },
+	{ CKA_DECRYPT, &(CK_BBOOL){CK_TRUE}, sizeof(CK_BBOOL) },
+	{ CKA_SIGN, &(CK_BBOOL){CK_TRUE}, sizeof(CK_BBOOL) },
+	{ CKA_VERIFY, &(CK_BBOOL){CK_TRUE}, sizeof(CK_BBOOL) },
+	{ CKA_VALUE_LEN, &(CK_ULONG){16}, sizeof(CK_ULONG) },
+};
 
 /*
  * Util to find a slot on which to open a session
  */
+
 static CK_RV close_lib(void)
 {
 	return C_Finalize(0);
@@ -151,12 +134,10 @@ static CK_RV init_lib_and_find_token_slot(CK_SLOT_ID *slot)
 	CK_ULONG count = 0;
 
 	rv = C_Initialize(0);
-	// printf("C_Initialize rv=%lu\n", rv);
 	if (rv)
 		return rv;
 
 	rv = C_GetSlotList(CK_TRUE, NULL, &count);
-	// printf("C_GetSlotList rv=%lu\n", rv);
 	if (rv != CKR_OK)
 		goto bail;
 
@@ -172,7 +153,6 @@ static CK_RV init_lib_and_find_token_slot(CK_SLOT_ID *slot)
 	}
 
 	rv = C_GetSlotList(CK_TRUE, slots, &count);
-	// printf("C_GetSlotList rv=%lu\n", rv);
 	if (rv)
 		goto bail;
 
@@ -191,9 +171,12 @@ bail:
  * Helpers for tests where we must log into the token.
  * These define the genuine PINs and label to be used with the test token.
  */
-static CK_UTF8CHAR test_token_so_pin[] = { 1, 2, 3, 4, };
-static CK_UTF8CHAR test_token_user_pin[] = { 5, 6, 7, 8, };
-static CK_UTF8CHAR test_token_label[] = "mytoken";
+
+static CK_UTF8CHAR test_token_so_pin[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8 , 9, 10, };
+static CK_UTF8CHAR test_token_user_pin[] = {
+	1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+};
+static CK_UTF8CHAR test_token_label[] = "PKCS11 TA test token";
 
 static CK_RV init_test_token(CK_SLOT_ID slot)
 {
@@ -250,497 +233,109 @@ static CK_RV init_user_test_token(CK_SLOT_ID slot)
 	return rv;
 }
 
-
-
-
-static CK_RV test_uninitialized_token(CK_SLOT_ID slot)
-{
-	CK_RV rv = CKR_GENERAL_ERROR;
-	CK_TOKEN_INFO token_info = { };
-	CK_FLAGS flags = 0;
-
-	// C_InitToken() on uninitialized token BEGIN
-
-	rv = init_test_token(slot);
-	if (rv != CKR_OK) {
-		PRI_FAIL("init_test_token, rv=%lu", rv);
-		goto out;
-	}
-
-	rv = C_GetTokenInfo(slot, &token_info);
-	if (rv != CKR_OK) {
-		PRI_FAIL("C_GetTokenInfo, rv=%lu", rv);
-		goto out;
-	}
-
-	flags = token_info.flags;
-
-	if (!!(flags & CKF_TOKEN_INITIALIZED) != CK_TRUE ||
-	    !(flags & CKF_ERROR_STATE) != CK_TRUE ||
-	    !(flags & CKF_USER_PIN_INITIALIZED) != CK_TRUE) {
-		rv = CKR_GENERAL_ERROR;
-		goto out;
-	}
-
-	rv = init_user_test_token(slot);
-	if (rv != CKR_OK) {
-		PRI_FAIL("init_user_test_token, rv=%lu", rv);
-		goto out;
-	}
-
-	rv = C_GetTokenInfo(slot, &token_info);
-	if (rv != CKR_OK) {
-		PRI_FAIL("C_GetTokenInfo, rv=%lu", rv);
-		goto out;
-	}
-
-	flags = token_info.flags;
-
-	if (!!(flags & CKF_TOKEN_INITIALIZED) != CK_TRUE ||
-	    !(flags & CKF_USER_PIN_COUNT_LOW) != CK_TRUE ||
-	    !(flags & CKF_USER_PIN_FINAL_TRY) != CK_TRUE ||
-	    !(flags & CKF_USER_PIN_LOCKED) != CK_TRUE ||
-	    !(flags & CKF_USER_PIN_TO_BE_CHANGED) != CK_TRUE ||
-	    !!(flags & CKF_USER_PIN_INITIALIZED) != CK_TRUE ||
-	    !(flags & CKF_ERROR_STATE) != CK_TRUE)
-		rv = CKR_GENERAL_ERROR;
-
-out:
-	// C_InitToken() on uninitialized token END
-
-	return rv;
-}
-
-
-/* Create session object and token object from a session */
-static void invoke_ta_no_args()
-{
-	CK_RV rv = CKR_GENERAL_ERROR;
-	CK_SLOT_ID slot = 0;
-	CK_SESSION_HANDLE session = CK_INVALID_HANDLE;
-	CK_OBJECT_HANDLE obj_hdl = CK_INVALID_HANDLE;
-	CK_FLAGS session_flags = CKF_SERIAL_SESSION | CKF_RW_SESSION;
-
-	rv = init_lib_and_find_token_slot(&slot);
-	if (rv != CKR_OK) {
-		PRI_FAIL("init_lib_and_find_token_slot, rv=%lu", rv);
-		return;
-	}
-
-	rv = close_lib();
-	if (rv != CKR_OK)
-		PRI_FAIL("close_lib, rv=%lu", rv);
-}
-
-
-/* Create session object and token object from a session */
-static void test_create_destroy_single_object(bool persistent)
-{
-	CK_RV rv = CKR_GENERAL_ERROR;
-	CK_SLOT_ID slot = 0;
-	CK_SESSION_HANDLE session = CK_INVALID_HANDLE;
-	CK_OBJECT_HANDLE obj_hdl = CK_INVALID_HANDLE;
-	CK_FLAGS session_flags = CKF_SERIAL_SESSION | CKF_RW_SESSION;
-
-	rv = init_lib_and_find_token_slot(&slot);
-	if (rv != CKR_OK) {
-		PRI_FAIL("init_lib_and_find_token_slot, rv=%lu", rv);
-		return;
-	}
-		
-	rv = C_OpenSession(slot, session_flags, NULL, 0, &session);
-	if (rv != CKR_OK) {
-		PRI_FAIL("C_OpenSession, rv=%lu", rv);
-		goto out;
-	}
-
-	if (persistent) {
-		rv = C_CreateObject(session, cktest_token_object,
-				    ARRAY_SIZE(cktest_token_object),
-				    &obj_hdl);
-	} else {
-		rv = C_CreateObject(session, cktest_session_object,
-				    ARRAY_SIZE(cktest_session_object),
-				    &obj_hdl);
-	}
-
-	if (rv != CKR_OK) {
-		PRI_FAIL("C_CreateObject, rv=%lu", rv);
-		goto out;
-	}
-
-	rv = C_DestroyObject(session, obj_hdl);
-	if (rv != CKR_OK)
-		PRI_FAIL("C_DestroyObject, rv=%lu", rv);
-	
-out:
-	rv = C_CloseSession(session);
-	if (rv != CKR_OK)
-		PRI_FAIL("C_CloseSession, rv=%lu", rv);
-	
-
-	rv = close_lib();
-	if (rv != CKR_OK)
-		PRI_FAIL("close_lib, rv=%lu", rv);
-}
-
-
-/*
- * Test cases
- * ==========
- */
-
-/*
- * List PKCS#11 slots and get information from the last slot
- */
-
-static void xtest_pkcs11_test_1002(void)
-{
-	CK_RV rv = CKR_GENERAL_ERROR;
-	CK_SLOT_ID slot = 0;
-	CK_SESSION_HANDLE session[3] = { 0 };
-	CK_FLAGS session_flags = 0;
-	CK_SESSION_INFO session_info = { };
-	CK_FUNCTION_LIST_PTR ckfunc_list = NULL;
-
-	printf("Initializing:\n");
-
-	rv = init_lib_and_find_token_slot(&slot);
-
-	if (rv != CKR_OK) {
-		PRI_FAIL("init_lib_and_find_token_slot, rv=%lu", rv);
-		goto bail;
-	}
-
-	rv = C_GetFunctionList(&ckfunc_list);
-	if (rv != CKR_OK || ckfunc_list == NULL) {
-		PRI_FAIL("C_GetFunctionList, rv=%lu", rv);
-		goto bail;
-	}
-
-	session_flags = CKF_SERIAL_SESSION;
-	rv = C_OpenSession(slot, session_flags, NULL, 0, &session[0]);
-	if (rv != CKR_OK) {
-		PRI_FAIL("C_OpenSession (CKF_SERIAL_SESSION), rv=%lu", rv);
-		goto bail;
-	}
-
-	rv = C_GetSessionInfo(session[0], &session_info);
-	if (rv != CKR_OK) {
-		PRI_FAIL("C_GetSessionInfo, rv=%lu", rv);
-		goto bail;
-	}
-
-	print_ck_session_info(&session_info);
-
-bail:
-	rv = close_lib();
-	if (rv != CKR_OK) {
-		PRI_FAIL("close_lib, rv=%lu", rv);
-		exit(EXIT_FAILURE);
-	}
-}
-
-
-/*
- * PKCS11: Login to PKCS#11 token
- */
-
-static void xtest_pkcs11_test_1003(void) 
-{
-	
-	CK_RV rv = CKR_GENERAL_ERROR;
-	CK_FUNCTION_LIST_PTR ckfunc_list = NULL;
-	CK_SLOT_ID slot = 0;
-	CK_TOKEN_INFO token_info = { };
-
-	// rv = C_GetFunctionList(&ckfunc_list);
-	// if (rv != CKR_OK ||
-	//     ckfunc_list->C_InitToken == NULL ||
-	//     ckfunc_list->C_InitPIN == NULL ||
-	//     ckfunc_list->C_SetPIN == NULL ||
-	//     ckfunc_list->C_Login == NULL ||
-	//     ckfunc_list->C_Logout == NULL)
-	// 	goto out;
-
-	rv = init_lib_and_find_token_slot(&slot);
-	if (rv != CKR_OK) {
-		PRI_FAIL("init_lib_and_find_token_slot, rv=%lu", rv);
-		goto out;
-	}
-
-	rv = C_GetTokenInfo(slot, &token_info);
-	if (rv != CKR_OK) {
-		PRI_FAIL("C_GetTokenInfo, rv=%lu", rv);
-		goto out;
-	}
-
-	/* Abort test if token is about to lock */
-	if (!(token_info.flags & CKF_SO_PIN_FINAL_TRY) != CK_TRUE) {
-		PRI_FAIL("token_info.flags", NULL);
-		goto out;
-	}
-
-	if (!(token_info.flags & CKF_TOKEN_INITIALIZED)) {
-		rv = test_uninitialized_token(slot);
-		if (rv != CKR_OK) {
-			PRI_FAIL("test_uninitialized_token, rv=%lu", rv);
-			goto out;
-		}
-	}
-
-	// // rv = test_already_initialized_token(slot);
-	// // if (rv != CKR_OK) {
-	// // 	PRI_FAIL("test_already_initialized_token, rv=%lu", rv);
-	// // 	goto out;
-	// // }
-
-	// // rv = test_login_logout(slot);
-	// // if (rv != CKR_OK) {
-	// // 	PRI_FAIL("test_login_logout, rv=%lu", rv);
-	// // 	goto out;
-	// // }
-
-	// // rv = test_set_pin(slot, CKU_USER);
-	// // if (rv != CKR_OK) {
-	// // 	PRI_FAIL("test_set_pin, rv=%lu", rv);
-	// // 	goto out;
-	// // }
-
-	// // rv = test_set_pin(slot, CKU_SO);
-	// // if (rv != CKR_OK) {
-	// // 	PRI_FAIL("test_set_pin, rv=%lu", rv);
-	// // 	goto out;
-	// // }
-
-	// // /*
-	//  * CKU_CONTEXT_SPECIFIC is anything not CKU_USER or CKU_SO in order
-	//  * to skip the initial login.
-	//  */
-	// test_set_pin(slot, CKU_CONTEXT_SPECIFIC);
-out:
-	rv = close_lib();
-	
-	if (rv != CKR_OK) {
-		PRI_FAIL("close_lib, rv=%lu", rv);
-	} 
-}
-
-
-
-/** ============================== generate corpus =============================== **/
-
-
-void gen_corp_PKCS11_CMD_CREATE_OBJECT()
-{
-	test_create_destroy_single_object(false);
-	// test_create_destroy_single_object(true);
-}
-
-
-
-
-
-
-
-
-
 /** ============================== harness =============================== **/
 
 /*
- * Harness sending TA data blobs without serialization
+ * The memmem() function finds the start of the first occurrence of the
+ * substring 'needle' of length 'nlen' in the memory area 'haystack' of
+ * length 'hlen'.
+ *
+ * The return value is a pointer to the beginning of the sub-string, or
+ * NULL if the substring is not found.
  */
-
-
-/* Create session object and token object from a session */
-static void test_create_objects_in_session(bool readwrite)
+void *memmem(const void *haystack, size_t hlen, const void *needle, size_t nlen)
 {
-	CK_RV rv = CKR_GENERAL_ERROR;
-	CK_SLOT_ID slot = 0;
-	CK_SESSION_HANDLE session = CK_INVALID_HANDLE;
-	CK_OBJECT_HANDLE token_obj_hld = CK_INVALID_HANDLE;
-	CK_OBJECT_HANDLE session_obj_hld = CK_INVALID_HANDLE;
-	CK_FLAGS session_flags = CKF_SERIAL_SESSION;
+    int needle_first;
+    const void *p = haystack;
+    size_t plen = hlen;
 
-	rv = init_lib_and_find_token_slot(&slot);
-	if (!(rv == CKR_OK)) {
-		printf("init_lib_and_find_token_slot failed\n");
-		return;
-	}
+    if (!nlen)
+        return NULL;
 
-	if (readwrite)
-		session_flags |= CKF_RW_SESSION;
+    needle_first = *(unsigned char *)needle;
 
-	rv = C_OpenSession(slot, session_flags, NULL, 0, &session);
-	if (!(rv == CKR_OK)) {
-		printf("C_OpenSession failed\n");
-		goto out;
-	}
+    while (plen >= nlen && (p = memchr(p, needle_first, plen - nlen + 1)))
+    {
+        if (!memcmp(p, needle, nlen))
+            return (void *)p;
 
-	rv = C_CreateObject(session, cktest_token_object,
-			    ARRAY_SIZE(cktest_token_object),
-			    &token_obj_hld);
+        p++;
+        plen = hlen - (p - haystack);
+    }
 
-	if (readwrite) {
-		if (!(rv == CKR_OK)) {
-			printf("C_CreateObject (token object) failed\n");
-			goto out;
-		}
-	} else {
-		if (!(rv == CKR_SESSION_READ_ONLY)) {
-			printf("C_CreateObject failed (token object) due to CKR_SESSION_READ_ONLY\n");
-			goto out;
-		}
-	}
-
-	rv = C_CreateObject(session, cktest_session_object,
-			    ARRAY_SIZE(cktest_session_object),
-			    &session_obj_hld);
-
-	if (!(rv == CKR_OK)) {
-			printf("C_CreateObject (session object) failed\n");
-			goto out_tobj;
-		}
-
-	rv = C_DestroyObject(session, session_obj_hld);
-	if (!(rv == CKR_OK))
-		printf("C_DestroyObject (session object) failed\n");
-
-out_tobj:
-	if (readwrite) {
-		rv = C_DestroyObject(session, token_obj_hld);
-		if (!(rv == CKR_OK))
-			printf("C_DestroyObject (token object) failed\n");
-	}
-out:
-	rv = C_CloseSession(session);
-	if (!(rv == CKR_OK))
-		printf("C_CloseSession failed\n");
-
-	rv = close_lib();
-	if (!(rv == CKR_OK))
-		printf("close_lib failed\n");
+    return NULL;
 }
 
+typedef struct b_pair {
+    uint8_t *b1;
+	size_t b1_sz;
+	uint8_t *b2;
+	size_t b2_sz;
+} b_pair;
 
-CK_RV invoke_PKCS11_CMD_CREATE_OBJECT(void *data, size_t data_sz, CK_SESSION_HANDLE session, CK_OBJECT_HANDLE_PTR handle) {
-	CK_RV rv = CKR_GENERAL_ERROR;
-	TEEC_SharedMemory *ctrl = NULL;
-	TEEC_SharedMemory *out_shm = NULL;
-	
-	uint32_t session_handle = session;
-	uint32_t key_handle = 0;
-
-	char *tmp_bp = NULL; // temp. buffer pointer
-	size_t out_size = 0;
-
-	/* Prepare args for TA */
-	/* Shm io0: (i/o) [session-handle][serialized-attributes] / [status] */
-	
-	ctrl = ckteec_alloc_shm(sizeof(session_handle) + data_sz, CKTEEC_SHM_INOUT);
-	if (!ctrl) {
-		return CKR_HOST_MEMORY;
-	}
-
-	tmp_bp = ctrl->buffer; 
-
-	memcpy(tmp_bp, &session_handle, sizeof(session_handle));
-	tmp_bp += sizeof(session_handle);
-
-	memcpy(tmp_bp, data, data_sz);
-
-	/* Prepare shm to store output from TA */
-	/* Shm io2: (out) [object handle] */
-	
-	out_shm = ckteec_alloc_shm(sizeof(key_handle), CKTEEC_SHM_OUT);
-	if (!out_shm) {
-		ckteec_free_shm(ctrl);
-		return CKR_HOST_MEMORY;
-	}
-
-	/* Invoke TA with prepared args and shm */
-
-	// printf("cmd=%d\n", PKCS11_CMD_CREATE_OBJECT);
-	// print_hex(ctrl->buffer, ctrl->size);
-	printf("PKCS11_CMD_CREATE_OBJECT\n");
-
-	rv = ckteec_invoke_ctrl_out(PKCS11_CMD_CREATE_OBJECT, ctrl, 
-					out_shm, &out_size);
-
-	if (rv != CKR_OK || out_size != out_shm->size) {
-		if (rv == CKR_OK)
-			rv = CKR_DEVICE_ERROR;
-		goto out;
-	}
-
-	memcpy(&key_handle, out_shm->buffer, sizeof(key_handle));
-	*handle = key_handle;
-	
-out:
-	ckteec_free_shm(out_shm);
-	ckteec_free_shm(ctrl);
-	return rv;
-
-	/**
-	 * ckteec_invoke_ta - Invoke PKCS11 TA for a target request through the TEE
-	 *
-	 * @cmd - PKCS11 TA command ID
-	 * @ctrl - shared memory with serialized request input arguments or NULL
-	 * @io1 - In memory buffer argument #1 for the command or NULL
-	 * @io2 - In and/or out memory buffer argument #2 for the command or NULL
-	 * @out2_size - Reference to @io2 output buffer size or NULL if not applicable
-	 * @io3 - In and/or out memory buffer argument #3 for the command or NULL
-	 * @out3_size - Reference to @io3 output buffer size or NULL if not applicable
-	 *
-	 * Return a CR_RV compliant return value
-	 */
-
-
-	// res = TEEC_InvokeCommand(&ta_ctx.session, cmd, &op, &origin);
-}
-
-/* fuzzing ctrl serialized blob */
-void harness_PKCS11_CMD_CREATE_OBJECT(void *data, size_t data_sz) {
-	CK_RV rv = CKR_GENERAL_ERROR;
-	CK_SLOT_ID slot = 0;
-	CK_SESSION_HANDLE session = CK_INVALID_HANDLE;
-	CK_OBJECT_HANDLE obj_hdl = CK_INVALID_HANDLE;
-	CK_FLAGS session_flags = CKF_SERIAL_SESSION | CKF_RW_SESSION;
-	
-	rv = init_lib_and_find_token_slot(&slot);
-	if (rv != CKR_OK) {
-		PRI_FAIL("init_lib_and_find_token_slot, rv=%lu", rv);
-		return;
-	}
-
-	rv = C_OpenSession(slot, session_flags, NULL, 0, &session);
-	if (rv != CKR_OK) {
-		PRI_FAIL("C_OpenSession, rv=%lu", rv);
-		goto out;
-	}
-	
-	rv = invoke_PKCS11_CMD_CREATE_OBJECT(data, data_sz, session, &obj_hdl);
-
-	if (rv != CKR_OK) {
-		PRI_FAIL("invoke_PKCS11_CMD_CREATE_OBJECT, rv=%lu", rv);
-		goto out;
-	}
-
-out:
-	rv = C_CloseSession(session);
-	if (rv != CKR_OK)
-		PRI_FAIL("C_CloseSession, rv=%lu", rv);
-
-	rv = close_lib();
-	if (rv != CKR_OK)
-		PRI_FAIL("close_lib, rv=%lu", rv);
-}
-
-TEEC_SharedMemory * afl_split_input(void *afl_input, size_t afl_input_sz, size_t *data_sz, int *cmd) 
+static bool split_buffer(const uint8_t *data, size_t data_sz, struct b_pair *buf_pair)
 {
-	void *tmp_bp;
 	size_t data_size;
-	TEEC_SharedMemory *data;
+	uint8_t *data_beg = data;
+	uint8_t *data_end = data + data_sz;
+	
+	const uint8_t separator[] = {0xDE, 0xAD, 0xBE, 0xEF};
+	size_t seperator_sz = ARRAY_SIZE(separator);
+	uint8_t *seperator_beg;
+
+	uint8_t *buf_1, *buf_2;
+	size_t buf_1_sz, buf_2_sz;
+
+	if (data_sz <= seperator_sz) {
+		printf("split_buffer: data is too short to be separated\n");
+		return false;
+	}
+
+	if ((seperator_beg = memmem(data_beg, data_sz, separator, seperator_sz)) == NULL) {
+		printf("split_buffer: could not find separator\n");
+		return false;
+	}
+
+	// if (!(buf_pair = malloc(sizeof(struct b_pair)))) {  // ! needs to be freed
+	// 	printf("split_buffer: malloc buf_1 failed\n");
+	// 	return false;
+	// }
+
+	buf_1_sz = seperator_beg - data_beg;
+	buf_2_sz = data_end - (seperator_beg + seperator_sz);
+
+	if (!(buf_1 = malloc(buf_1_sz))) {  // ! needs to be freed
+		printf("split_buffer: malloc buf_1 failed\n");
+		return false;
+	}
+
+	if (!(buf_2 = malloc(buf_2_sz))) { // ! needs to be freed
+		printf("split_buffer: malloc buf_2 failed\n");
+		free(buf_1);
+		return false;
+	}
+
+	memset(buf_pair, 0, sizeof(struct b_pair));
+	memset(buf_1, 0, buf_1_sz);
+	memset(buf_2, 0, buf_2_sz);
+
+	memcpy(buf_1, data_beg, buf_1_sz);
+	memcpy(buf_2, seperator_beg + seperator_sz, buf_2_sz);
+
+	*buf_pair = (b_pair){ .b1 = buf_1, .b1_sz = buf_1_sz, .b2 = buf_2, .b2_sz = buf_2_sz };
+
+	// print_hex(buf_pair->b1, buf_pair->b1_sz);
+	// print_hex(buf_pair->b2, buf_pair->b2_sz);
+
+	return true;
+}
+
+static uint8_t *afl_split_input(const uint8_t *afl_input, size_t afl_input_sz, size_t *data_sz, int *cmd) 
+{
+	uint8_t *tmp_bp;
+	uint8_t *data;
+	size_t data_size;
+	
 
 	if (afl_input_sz <= sizeof(*cmd)) {
 		printf("afl input is too short to split\n");
@@ -773,14 +368,843 @@ TEEC_SharedMemory * afl_split_input(void *afl_input, size_t afl_input_sz, size_t
 	memcpy(data, tmp_bp, data_size);
 
 	return data;
-	
 }
 
-/* assume afl_buf being of format [slot-id][data] (could be wrong since its afl generated) */
-void fuzz_ta(void *afl_input, size_t afl_input_sz) 
-{
 
-	TEEC_SharedMemory *data;
+/* Create session object and token object from a session */
+static void invoke_ta_no_args()
+{
+	CK_RV rv = CKR_GENERAL_ERROR;
+	CK_SLOT_ID slot = 0;
+	CK_SESSION_HANDLE session = CK_INVALID_HANDLE;
+	CK_OBJECT_HANDLE obj_hdl = CK_INVALID_HANDLE;
+	CK_FLAGS session_flags = CKF_SERIAL_SESSION | CKF_RW_SESSION;
+
+	rv = init_lib_and_find_token_slot(&slot);
+	if (rv != CKR_OK) {
+		PRI_FAIL("init_lib_and_find_token_slot, rv=%lu", rv);
+		return;
+	}
+
+	rv = close_lib();
+	if (rv != CKR_OK)
+		PRI_FAIL("close_lib, rv=%lu", rv);
+}
+
+
+/*
+ * Harness sending TA data blobs without serialization
+ */
+
+
+/**
+ * ckteec_invoke_ta - Invoke PKCS11 TA for a target request through the TEE
+ *
+ * @cmd - PKCS11 TA command ID
+ * @ctrl - shared memory with serialized request input arguments or NULL
+ * @io1 - In memory buffer argument #1 for the command or NULL
+ * @io2 - In and/or out memory buffer argument #2 for the command or NULL
+ * @out2_size - Reference to @io2 output buffer size or NULL if not applicable
+ * @io3 - In and/or out memory buffer argument #3 for the command or NULL
+ * @out3_size - Reference to @io3 output buffer size or NULL if not applicable
+ *
+ * Return a CR_RV compliant return value
+ */
+
+
+
+static CK_RV invoke_PKCS11_CMD_CREATE_OBJECT(const uint8_t *data, size_t data_sz, const CK_SESSION_HANDLE session, CK_OBJECT_HANDLE_PTR handle) {
+	CK_RV rv = CKR_GENERAL_ERROR;
+	TEEC_SharedMemory *ctrl = NULL;
+	TEEC_SharedMemory *out_shm = NULL;
+	uint32_t session_handle = session;
+	uint32_t key_handle = 0;
+	char *buf = NULL;
+	size_t out_size = 0;
+
+	if (!(session && handle))
+		return CKR_ARGUMENTS_BAD;
+
+	/* Prepare args for TA */
+	/* Shm io0: (i/o) [session-handle][serialized-attributes] / [status] */
+	
+	ctrl = ckteec_alloc_shm(sizeof(session_handle) + data_sz, CKTEEC_SHM_INOUT);
+	if (!ctrl) {
+		return CKR_HOST_MEMORY;
+	}
+
+	buf = ctrl->buffer; 
+
+	memcpy(buf, &session_handle, sizeof(session_handle));
+	buf += sizeof(session_handle);
+
+	memcpy(buf, data, data_sz);
+
+	/* Prepare shm to store output from TA */
+	/* Shm io2: (out) [object handle] */
+	
+	out_shm = ckteec_alloc_shm(sizeof(key_handle), CKTEEC_SHM_OUT);
+	if (!out_shm) {
+		ckteec_free_shm(ctrl);
+		return CKR_HOST_MEMORY;
+	}
+
+	/* Invoke TA with prepared args and shm */
+
+	rv = ckteec_invoke_ctrl_out(PKCS11_CMD_CREATE_OBJECT, ctrl, 
+					out_shm, &out_size);
+
+	if (rv != CKR_OK || out_size != out_shm->size) {
+		if (rv == CKR_OK)
+			rv = CKR_DEVICE_ERROR;
+		goto out;
+	}
+
+	memcpy(&key_handle, out_shm->buffer, sizeof(key_handle));
+	*handle = key_handle;
+	
+out:
+	ckteec_free_shm(out_shm);
+	ckteec_free_shm(ctrl);
+	return rv;
+}
+
+static CK_RV invoke_PKCS11_CMD_DECRYPT_INIT(void *data, size_t data_sz, CK_SESSION_HANDLE session, CK_OBJECT_HANDLE key) {
+	CK_RV rv = CKR_GENERAL_ERROR;
+	TEEC_SharedMemory *ctrl = NULL;
+	uint32_t session_handle = session;
+	uint32_t key_handle = key;
+	size_t ctrl_size = 0;
+	char *buf = NULL;
+
+	if (!(session && key))
+		return CKR_ARGUMENTS_BAD;
+
+	/*
+	 * Shm io0: (in/out) ctrl
+	 * (in) [session-handle][key-handle][serialized-mechanism-blob]
+	 * (out) [status]
+	 */
+	ctrl_size = sizeof(session_handle) + sizeof(key_handle) + data_sz;
+
+	ctrl = ckteec_alloc_shm(ctrl_size, CKTEEC_SHM_INOUT);
+	if (!ctrl) {
+		rv = CKR_HOST_MEMORY;
+		goto bail;
+	}
+
+	buf = ctrl->buffer;
+
+	memcpy(buf, &session_handle, sizeof(session_handle));
+	buf += sizeof(session_handle);
+
+	memcpy(buf, &key_handle, sizeof(key_handle));
+	buf += sizeof(key_handle);
+
+	memcpy(buf, data, data_sz);
+
+// printf("ctrl->size=%zu\n", ctrl->size);
+// print_hex(ctrl->buffer, ctrl->size);
+
+	rv = ckteec_invoke_ctrl(PKCS11_CMD_DECRYPT_INIT, ctrl);
+
+bail:
+	ckteec_free_shm(ctrl);
+
+	return rv;
+}
+
+static CK_RV invoke_PKCS11_CMD_ENCRYPT_INIT(void *data, size_t data_sz, CK_SESSION_HANDLE session, CK_OBJECT_HANDLE key) {
+	CK_RV rv = CKR_GENERAL_ERROR;
+	TEEC_SharedMemory *ctrl = NULL;
+	uint32_t session_handle = session;
+	uint32_t key_handle = key;
+	size_t ctrl_size = 0;
+	char *buf = NULL;
+
+	if (!(session && key))
+		return CKR_ARGUMENTS_BAD;
+
+	/*
+	 * Shm io0: (in/out) ctrl
+	 * (in) [session-handle][key-handle][serialized-mechanism-blob]
+	 * (out) [status]
+	 */
+	ctrl_size = sizeof(session_handle) + sizeof(key_handle) + data_sz;
+
+	ctrl = ckteec_alloc_shm(ctrl_size, CKTEEC_SHM_INOUT);
+	if (!ctrl) {
+		rv = CKR_HOST_MEMORY;
+		goto bail;
+	}
+
+	buf = ctrl->buffer;
+
+	memcpy(buf, &session_handle, sizeof(session_handle));
+	buf += sizeof(session_handle);
+
+	memcpy(buf, &key_handle, sizeof(key_handle));
+	buf += sizeof(key_handle);
+
+	memcpy(buf, data, data_sz);
+
+	rv = ckteec_invoke_ctrl(PKCS11_CMD_ENCRYPT_INIT, ctrl);
+
+bail:
+	ckteec_free_shm(ctrl);
+
+	return rv;
+}
+
+static CK_RV invoke_PKCS11_CMD_DIGEST_INIT(void *data, size_t data_sz, CK_SESSION_HANDLE session) {
+	CK_RV rv = CKR_GENERAL_ERROR;
+	TEEC_SharedMemory *ctrl = NULL;
+	uint32_t session_handle = session;
+	size_t ctrl_size = 0;
+	uint8_t *buf = NULL;
+
+	if (!session)
+		return CKR_ARGUMENTS_BAD;
+
+	/*
+	 * Shm io0: (in/out) ctrl
+	 * (in) [session-handle][serialized-mechanism-blob]
+	 * (out) [status]
+	 */
+	ctrl_size = sizeof(session_handle) + data_sz;
+	ctrl = ckteec_alloc_shm(ctrl_size, CKTEEC_SHM_INOUT);
+	if (!ctrl) {
+		rv = CKR_HOST_MEMORY;
+		goto bail;
+	}
+
+	buf = ctrl->buffer;
+
+	memcpy(buf, &session_handle, sizeof(session_handle));
+	buf += sizeof(session_handle);
+
+	memcpy(buf, data, data_sz);
+
+	rv = ckteec_invoke_ctrl(PKCS11_CMD_DIGEST_INIT, ctrl);
+
+bail:
+	ckteec_free_shm(ctrl);
+
+	return rv;
+}
+
+static CK_RV invoke_PKCS11_CMD_SIGN_INIT(void *data, size_t data_sz, CK_SESSION_HANDLE session, CK_OBJECT_HANDLE key) {
+	CK_RV rv = CKR_GENERAL_ERROR;
+	TEEC_SharedMemory *ctrl = NULL;
+	uint32_t session_handle = session;
+	uint32_t key_handle = key;
+	size_t ctrl_size = 0;
+	char *buf = NULL;
+
+	if (!session)
+		return CKR_ARGUMENTS_BAD;
+
+	/*
+	 * Shm io0: (in/out) ctrl
+	 * (in) [session-handle][key-handle][serialized-mechanism-blob]
+	 * (out) [status]
+	 */
+	ctrl_size = sizeof(session_handle) + sizeof(key_handle) + data_sz;
+	ctrl = ckteec_alloc_shm(ctrl_size, CKTEEC_SHM_INOUT);
+	if (!ctrl) {
+		rv = CKR_HOST_MEMORY;
+		goto bail;
+	}
+
+	buf = ctrl->buffer;
+
+	memcpy(buf, &session_handle, sizeof(session_handle));
+	buf += sizeof(session_handle);
+
+	memcpy(buf, &key_handle, sizeof(key_handle));
+	buf += sizeof(key_handle);
+
+	memcpy(buf, data, data_sz);
+
+	rv = ckteec_invoke_ctrl(PKCS11_CMD_SIGN_INIT, ctrl);
+
+bail:
+	ckteec_free_shm(ctrl);
+
+	return rv;
+}
+
+// static CK_RV invoke_PKCS11_CMD_VERIFY_INIT(void *data, size_t data_sz, CK_SESSION_HANDLE session) {
+
+// }
+
+static CK_RV invoke_PKCS11_CMD_GENERATE_KEY(void *data, size_t data_sz, CK_SESSION_HANDLE session, CK_OBJECT_HANDLE_PTR handle) {
+	CK_RV rv = CKR_GENERAL_ERROR;
+	TEEC_SharedMemory *ctrl = NULL;
+	TEEC_SharedMemory *out_shm = NULL;
+	uint32_t session_handle = session;
+	size_t ctrl_size = 0;
+	uint32_t key_handle = 0;
+	char *buf = NULL;
+	size_t out_size = 0;
+
+	if (!handle)
+		return CKR_ARGUMENTS_BAD;
+
+	/*
+	 * Shm io0: (in/out) ctrl
+	 * (in) [session-handle][serialized-mecha][serialized-attributes]
+	 * (out) [status]
+	 */
+	ctrl_size = sizeof(session_handle) + data_sz;
+
+	ctrl = ckteec_alloc_shm(ctrl_size, CKTEEC_SHM_INOUT);
+	if (!ctrl) {
+		rv = CKR_HOST_MEMORY;
+		goto bail;
+	}
+
+	buf = ctrl->buffer;
+
+	memcpy(buf, &session_handle, sizeof(session_handle));
+	buf += sizeof(session_handle);
+
+	memcpy(buf, data, data_sz);
+
+	/* Shm io2: (out) [object handle] */
+	out_shm = ckteec_alloc_shm(sizeof(key_handle), CKTEEC_SHM_OUT);
+	if (!out_shm) {
+		rv = CKR_HOST_MEMORY;
+		goto bail;
+	}
+
+	rv = ckteec_invoke_ctrl_out(PKCS11_CMD_GENERATE_KEY,
+				    ctrl, out_shm, &out_size);
+
+	if (rv != CKR_OK || out_size != out_shm->size) {
+		if (rv == CKR_OK)
+			rv = CKR_DEVICE_ERROR;
+		goto bail;
+	}
+
+	memcpy(&key_handle, out_shm->buffer, sizeof(key_handle));
+	*handle = key_handle;
+
+bail:
+	ckteec_free_shm(out_shm);
+	ckteec_free_shm(ctrl);
+
+	return rv;
+}
+
+// static CK_RV invoke_PKCS11_CMD_FIND_OBJECTS_INIT(void *data, size_t data_sz, CK_SESSION_HANDLE session) {
+
+// }
+
+// static CK_RV invoke_PKCS11_CMD_GET_ATTRIBUTE_VALUE(void *data, size_t data_sz, CK_SESSION_HANDLE session) {
+
+// }
+
+// static CK_RV invoke_PKCS11_CMD_COPY_OBJECT(void *data, size_t data_sz, CK_SESSION_HANDLE session) {
+
+// }
+
+// static CK_RV invoke_PKCS11_CMD_DERIVE_KEY(void *data, size_t data_sz, CK_SESSION_HANDLE session) {
+
+// }
+
+static CK_RV invoke_PKCS11_CMD_GENERATE_KEY_PAIR(void *data, size_t data_sz, CK_SESSION_HANDLE session, CK_OBJECT_HANDLE_PTR pub_key, CK_OBJECT_HANDLE_PTR priv_key) {
+	CK_RV rv = CKR_GENERAL_ERROR;
+	TEEC_SharedMemory *ctrl = NULL;
+	TEEC_SharedMemory *out_shm = NULL;
+	uint32_t session_handle = session;
+	size_t ctrl_size = 0;
+	uint32_t *key_handle = NULL;
+	size_t key_handle_size = 2 * sizeof(*key_handle);
+	char *buf = NULL;
+	size_t out_size = 0;
+
+	if (!(pub_key && priv_key))
+		return CKR_ARGUMENTS_BAD;
+
+	/*
+	 * Shm io0: (in/out) ctrl
+	 * (in) [session-handle][serialized-mecha][serialized-pub_attribs]
+	 *      [serialized-priv_attribs]
+	 * (out) [status]
+	 */
+	ctrl_size = sizeof(session_handle) + data_sz;
+
+	ctrl = ckteec_alloc_shm(ctrl_size, CKTEEC_SHM_INOUT);
+	if (!ctrl) {
+		rv = CKR_HOST_MEMORY;
+		goto bail;
+	}
+
+	buf = ctrl->buffer;
+
+	memcpy(buf, &session_handle, sizeof(session_handle));
+	buf += sizeof(session_handle);
+
+	memcpy(buf, data, data_sz);
+
+	/*
+	 * Shm io2: (out) public key object handle][private key object handle]
+	 */
+	out_shm = ckteec_alloc_shm(key_handle_size, CKTEEC_SHM_OUT);
+	if (!out_shm) {
+		rv = CKR_HOST_MEMORY;
+		goto bail;
+	}
+
+	rv = ckteec_invoke_ctrl_out(PKCS11_CMD_GENERATE_KEY_PAIR,
+				    ctrl, out_shm, &out_size);
+
+	if (rv != CKR_OK || out_size != out_shm->size) {
+		if (rv == CKR_OK)
+			rv = CKR_DEVICE_ERROR;
+		goto bail;
+	}
+
+	key_handle = out_shm->buffer;
+	*pub_key = key_handle[0];
+	*priv_key = key_handle[1];
+
+bail:
+	ckteec_free_shm(out_shm);
+	ckteec_free_shm(ctrl);
+
+	return rv;
+}
+
+// static CK_RV invoke_PKCS11_CMD_WRAP_KEY(void *data, size_t data_sz, CK_SESSION_HANDLE session) {
+
+// }
+
+// static CK_RV invoke_PKCS11_CMD_UNWRAP_KEY(void *data, size_t data_sz, CK_SESSION_HANDLE session) {
+
+// }
+
+/* fuzzing ctrl serialized blob */
+static void harness_PKCS11_CMD_CREATE_OBJECT(const uint8_t *data, size_t data_sz) {
+	CK_RV rv = CKR_GENERAL_ERROR;
+	CK_SLOT_ID slot = 0;
+	CK_SESSION_HANDLE session = CK_INVALID_HANDLE;
+	CK_OBJECT_HANDLE obj_hdl = CK_INVALID_HANDLE;
+	CK_FLAGS session_flags = CKF_SERIAL_SESSION | CKF_RW_SESSION;
+	
+	rv = init_lib_and_find_token_slot(&slot);
+	if (rv != CKR_OK) {
+		PRI_FAIL("init_lib_and_find_token_slot, rv=%lu", rv);
+		return;
+	}
+
+	rv = C_OpenSession(slot, session_flags, NULL, 0, &session);
+	if (rv != CKR_OK) {
+		PRI_FAIL("C_OpenSession, rv=%lu", rv);
+		goto out;
+	}
+	
+	rv = invoke_PKCS11_CMD_CREATE_OBJECT(data, data_sz, session, &obj_hdl);
+
+	if (rv != CKR_OK) {
+		PRI_FAIL("invoke_PKCS11_CMD_CREATE_OBJECT, rv=%lu", rv);
+		goto out;
+	}
+
+out:
+	rv = C_CloseSession(session);
+	if (rv != CKR_OK)
+		PRI_FAIL("C_CloseSession, rv=%lu", rv);
+
+	rv = C_Finalize(0);
+	if (rv != CKR_OK)
+		PRI_FAIL("C_Finalize, rv=%lu", rv);
+}
+
+void harness_PKCS11_CMD_DECRYPT_INIT(void *data, size_t data_sz) {
+	CK_RV rv = CKR_GENERAL_ERROR;
+	CK_SLOT_ID slot = 0;
+	CK_SESSION_HANDLE session = CK_INVALID_HANDLE;
+	CK_FLAGS session_flags = CKF_SERIAL_SESSION | CKF_RW_SESSION;
+	CK_OBJECT_HANDLE key_handle = CK_INVALID_HANDLE;
+
+	uint8_t out[512] = { 0 };
+	CK_ULONG out_len = 512;
+
+	rv = init_lib_and_find_token_slot(&slot);
+	if (rv != CKR_OK) {
+		PRI_FAIL("init_lib_and_find_token_slot, rv=%lu", rv);
+		return;
+	}
+
+	rv = C_OpenSession(slot, session_flags, NULL, 0, &session);
+	if (rv != CKR_OK) {
+		PRI_FAIL("C_OpenSession, rv=%lu", rv);
+		goto out;
+	}
+
+	/*
+	 * Generate a 128 bit AES Secret Key.
+	 * Initialize it for decryption.
+	 */
+
+	rv = C_GenerateKey(session, &cktest_aes_keygen_mechanism, ck_test_generate_aes_object_encrypt_decrypt, ARRAY_SIZE(ck_test_generate_aes_object_encrypt_decrypt), &key_handle);
+	if (rv != CKR_OK) {
+		PRI_FAIL("C_GenerateKey, rv=%lu", rv);
+		goto err;
+	}
+
+	rv = invoke_PKCS11_CMD_DECRYPT_INIT(data, data_sz, session, &key_handle);
+	if (rv != CKR_OK) {
+		PRI_FAIL("invoke_PKCS11_CMD_DECRYPT_INIT, rv=%lu", rv);
+		goto out;
+	}
+
+	rv = C_DecryptFinal(session, NULL, NULL);
+	/* Only check that the operation is no more active */
+	if (rv == CKR_BUFFER_TOO_SMALL) {
+		PRI_FAIL("C_DecryptFinal, rv=%lu", rv);
+		goto err;
+	}
+
+	rv = C_DestroyObject(session, key_handle);
+	if (rv != CKR_OK) {
+		PRI_FAIL("C_DestroyObject, rv=%lu", rv);
+		goto err;
+	}
+
+	goto out;
+
+
+err_destr_obj:
+	rv = C_DestroyObject(session, key_handle);
+	if (rv != CKR_OK)
+		PRI_FAIL("C_DestroyObject, rv=%lu", rv);
+err:
+out:
+	rv = C_CloseSession(session);
+	if (rv != CKR_OK)
+		PRI_FAIL("C_CloseSession, rv=%lu", rv);
+close_lib:
+	rv = C_Finalize(0);
+	if (rv != CKR_OK)
+		PRI_FAIL("C_Finalize, rv=%lu", rv);
+
+}
+
+/* Encrypt using a 128 bit AES secret key */
+// 1010.4
+void harness_PKCS11_CMD_ENCRYPT_INIT(void *data, size_t data_sz) {
+	CK_RV rv = CKR_GENERAL_ERROR;
+	CK_SLOT_ID slot = 0;
+	CK_SESSION_HANDLE session = CK_INVALID_HANDLE;
+	CK_FLAGS session_flags = CKF_SERIAL_SESSION | CKF_RW_SESSION;
+	CK_OBJECT_HANDLE key_handle = CK_INVALID_HANDLE;
+
+	uint8_t out[512] = { 0 };
+	CK_ULONG out_len = 512;
+
+	rv = init_lib_and_find_token_slot(&slot);
+	if (rv != CKR_OK) {
+		PRI_FAIL("init_lib_and_find_token_slot, rv=%lu", rv);
+		return;
+	}
+
+	rv = C_OpenSession(slot, session_flags, NULL, 0, &session);
+	if (rv != CKR_OK) {
+		PRI_FAIL("C_OpenSession, rv=%lu", rv);
+		goto out;
+	}
+
+	/*
+	 * Generate a 128 bit AES Secret Key.
+	 * Initialize it for encyption.
+	 */
+
+	rv = C_GenerateKey(session, &cktest_aes_keygen_mechanism, ck_test_generate_aes_object_encrypt_decrypt, ARRAY_SIZE(ck_test_generate_aes_object_encrypt_decrypt), &key_handle);
+	if (rv != CKR_OK) {
+		PRI_FAIL("C_GenerateKey, rv=%lu", rv);
+		goto err;
+	}
+
+	rv = invoke_PKCS11_CMD_ENCRYPT_INIT(data, data_sz, session, &key_handle);
+	if (rv != CKR_OK) {
+		PRI_FAIL("invoke_PKCS11_CMD_ENCRYPT_INIT, rv=%lu", rv);
+		goto out;
+	}
+
+	rv = C_EncryptFinal(session, NULL, NULL);
+	/* Only check that the operation is no more active */
+	if (rv == CKR_BUFFER_TOO_SMALL) {
+		PRI_FAIL("C_EncryptFinal, rv=%lu", rv);
+		goto err;
+	}
+
+	rv = C_DestroyObject(session, key_handle);
+	if (rv != CKR_OK) {
+		PRI_FAIL("C_DestroyObject, rv=%lu", rv);
+		goto err;
+	}
+
+	goto out;
+
+
+err_destr_obj:
+	rv = C_DestroyObject(session, key_handle);
+	if (rv != CKR_OK)
+		PRI_FAIL("C_DestroyObject, rv=%lu", rv);
+err:
+out:
+	rv = C_CloseSession(session);
+	if (rv != CKR_OK)
+		PRI_FAIL("C_CloseSession, rv=%lu", rv);
+close_lib:
+	rv = C_Finalize(0);
+	if (rv != CKR_OK)
+		PRI_FAIL("C_Finalize, rv=%lu", rv);
+
+}
+
+void harness_PKCS11_CMD_DIGEST_INIT(void *data, size_t data_sz) {
+	CK_RV rv = CKR_GENERAL_ERROR;
+	CK_SLOT_ID slot = 0;
+	CK_SESSION_HANDLE session = CK_INVALID_HANDLE;
+	CK_FLAGS session_flags = CKF_SERIAL_SESSION | CKF_RW_SESSION;
+
+	rv = init_lib_and_find_token_slot(&slot);
+	if (rv != CKR_OK) {
+		PRI_FAIL("init_lib_and_find_token_slot, rv=%lu", rv);
+		return;
+	}
+
+	rv = init_test_token(slot);
+	if (rv != CKR_OK) {
+		PRI_FAIL("init_test_token, rv=%lu", rv);
+		goto close_lib;
+	}
+
+	rv = init_user_test_token(slot);
+	if (rv != CKR_OK) {
+		PRI_FAIL("init_user_test_token, rv=%lu", rv);
+		goto close_lib;
+	}
+
+	rv = C_OpenSession(slot, session_flags, NULL, 0, &session);
+	if (rv != CKR_OK){
+		PRI_FAIL("C_OpenSession, rv=%lu", rv);
+		goto close_lib;
+	}
+
+	/* Login to Test Token */
+	rv = C_Login(session, CKU_USER,	test_token_user_pin,
+		     sizeof(test_token_user_pin));
+	if (rv != CKR_OK){
+		PRI_FAIL("C_Login, rv=%lu", rv);
+		goto out;
+	}
+
+	rv = invoke_PKCS11_CMD_DIGEST_INIT(data, data_sz, session);
+
+	if (rv != CKR_OK) {
+		PRI_FAIL("invoke_PKCS11_CMD_DIGEST_INIT, rv=%lu", rv);
+		goto out;
+	}
+
+out:
+	rv = C_CloseSession(session);
+	if (rv != CKR_OK)
+		PRI_FAIL("C_CloseSession, rv=%lu", rv);
+close_lib:
+	rv = C_Finalize(0);
+	if (rv != CKR_OK)
+		PRI_FAIL("C_Finalize, rv=%lu", rv);
+}
+
+void harness_PKCS11_CMD_SIGN_INIT(void *data, size_t data_sz) {
+	CK_RV rv = CKR_GENERAL_ERROR;
+	CK_SLOT_ID slot = 0;
+	CK_SESSION_HANDLE session = CK_INVALID_HANDLE;
+	CK_FLAGS session_flags = CKF_SERIAL_SESSION | CKF_RW_SESSION;
+	CK_OBJECT_HANDLE key_handle = CK_INVALID_HANDLE;
+	CK_ATTRIBUTE_PTR attr_key;
+	CK_ULONG attr_count;
+
+	rv = init_lib_and_find_token_slot(&slot);
+	if (rv != CKR_OK) {
+		PRI_FAIL("init_lib_and_find_token_slot, rv=%lu", rv);
+		return;
+	}
+
+	rv = C_OpenSession(slot, session_flags, NULL, 0, &session);
+	if (rv != CKR_OK){
+		PRI_FAIL("C_OpenSession, rv=%lu", rv);
+		goto err_close_lib;
+	}
+
+	rv = C_GenerateKey(session, &cktest_aes_keygen_mechanism, &ck_test_generate_aes_object_sign_verify, ARRAY_SIZE(ck_test_generate_aes_object_sign_verify), &key_handle);
+	if (rv != CKR_OK) {
+		PRI_FAIL("C_GenerateKey, rv=%lu", rv);
+		goto err;
+	}
+
+	// rv = C_CreateObject(session, ck_test_import_hmac256_object_sign_verify, ARRAY_SIZE(ck_test_import_hmac256_object_sign_verify), &key_handle);
+	// if (rv != CKR_OK) {
+	// 	PRI_FAIL("Failed to create HMACsha256 object: %lu : 0x%x", rv, (uint32_t)rv);
+	// 	return;
+	// }
+
+	rv = invoke_PKCS11_CMD_SIGN_INIT(data, data_sz, session, &key_handle);
+	if (rv != CKR_OK) {
+		PRI_FAIL("invoke_PKCS11_CMD_SIGN_INIT, rv=%lu", rv);
+		goto err_destr_obj;
+	}
+
+	goto out;
+
+err_destr_obj:
+	rv = C_DestroyObject(session, key_handle);
+	if (rv != CKR_OK)
+		PRI_FAIL("C_DestroyObject, rv=%lu", rv);
+err:
+out:
+	rv = C_CloseSession(session);
+	if (rv != CKR_OK)
+		PRI_FAIL("C_CloseSession, rv=%lu", rv);
+err_close_lib:
+	rv = C_Finalize(0);
+	if (rv != CKR_OK)
+		PRI_FAIL("C_Finalize, rv=%lu", rv);
+}
+
+// void harness_PKCS11_CMD_VERIFY_INIT(void *data, size_t data_sz) {
+
+// }
+
+void harness_PKCS11_CMD_GENERATE_KEY(void *data, size_t data_sz) {
+	CK_RV rv = CKR_GENERAL_ERROR;
+	CK_SLOT_ID slot = 0;
+	CK_SESSION_HANDLE session = CK_INVALID_HANDLE;
+	CK_FLAGS session_flags = CKF_SERIAL_SESSION | CKF_RW_SESSION;
+	CK_OBJECT_HANDLE key_handle = CK_INVALID_HANDLE;
+
+	rv = init_lib_and_find_token_slot(&slot);
+	if (rv != CKR_OK) {
+		PRI_FAIL("init_lib_and_find_token_slot, rv=%lu", rv);
+		return;
+	}
+
+	rv = C_OpenSession(slot, session_flags, NULL, 0, &session);
+	if (rv != CKR_OK){
+		PRI_FAIL("C_OpenSession, rv=%lu", rv);
+		goto out;
+	}
+
+	rv = invoke_PKCS11_CMD_GENERATE_KEY(data, data_sz, session, &key_handle);
+
+	if (rv != CKR_OK) {
+		PRI_FAIL("invoke_PKCS11_CMD_CREATE_OBJECT, rv=%lu", rv);
+		goto out;
+	}
+
+out:
+	rv = C_CloseSession(session);
+	if (rv != CKR_OK)
+		PRI_FAIL("C_CloseSession, rv=%lu", rv);
+
+	rv = C_Finalize(0);
+	if (rv != CKR_OK)
+		PRI_FAIL("C_Finalize, rv=%lu", rv);
+
+}
+
+// void harness_PKCS11_CMD_FIND_OBJECTS_INIT(void *data, size_t data_sz) {
+
+// }
+
+// void harness_PKCS11_CMD_GET_ATTRIBUTE_VALUE(void *data, size_t data_sz) {
+
+// }
+
+// void harness_PKCS11_CMD_COPY_OBJECT(void *data, size_t data_sz) {
+
+// }
+
+// void harness_PKCS11_CMD_DERIVE_KEY(void *data, size_t data_sz) {
+
+// }
+
+void harness_PKCS11_CMD_GENERATE_KEY_PAIR(void *data, size_t data_sz) {
+	CK_RV rv = CKR_GENERAL_ERROR;
+	CK_SLOT_ID slot = 0;
+	CK_SESSION_HANDLE session = CK_INVALID_HANDLE;
+	CK_FLAGS session_flags = CKF_SERIAL_SESSION | CKF_RW_SESSION;
+	CK_OBJECT_HANDLE public_key = CK_INVALID_HANDLE;
+	CK_OBJECT_HANDLE private_key = CK_INVALID_HANDLE;
+
+	rv = init_lib_and_find_token_slot(&slot);
+	if (rv != CKR_OK) {
+		PRI_FAIL("init_lib_and_find_token_slot, rv=%lu", rv);
+		return;
+	}
+
+	rv = init_test_token(slot);
+	if (rv != CKR_OK) {
+		PRI_FAIL("init_test_token, rv=%lu", rv);
+		goto close_lib;
+	}
+
+	rv = init_user_test_token(slot);
+	if (rv != CKR_OK) {
+		PRI_FAIL("init_user_test_token, rv=%lu", rv);
+		goto close_lib;
+	}
+
+	rv = C_OpenSession(slot, session_flags, NULL, 0, &session);
+	if (rv != CKR_OK){
+		PRI_FAIL("C_OpenSession, rv=%lu", rv);
+		goto close_lib;
+	}
+
+	/* Login to Test Token */
+	rv = C_Login(session, CKU_USER,	test_token_user_pin,
+		     sizeof(test_token_user_pin));
+	if (rv != CKR_OK){
+		PRI_FAIL("C_Login, rv=%lu", rv);
+		goto out;
+	}
+
+	rv = invoke_PKCS11_CMD_GENERATE_KEY_PAIR(data, data_sz, session, &public_key, &private_key);
+
+	if (rv != CKR_OK) {
+		PRI_FAIL("invoke_PKCS11_CMD_GENERATE_KEY_PAIR, rv=%lu", rv);
+		goto out;
+	}
+
+out:
+	rv = C_CloseSession(session);
+	if (rv != CKR_OK)
+		PRI_FAIL("C_CloseSession, rv=%lu", rv);
+close_lib:
+	rv = C_Finalize(0);
+	if (rv != CKR_OK)
+		PRI_FAIL("C_Finalize, rv=%lu", rv);
+}
+
+
+// void harness_PKCS11_CMD_WRAP_KEY(void *data, size_t data_sz) {
+
+// }
+
+// void harness_PKCS11_CMD_UNWRAP_KEY(void *data, size_t data_sz) {
+
+// }
+
+
+/* assume afl_buf being of format [slot-id][data] (could be wrong since its afl generated) */
+void fuzz_ta(uint8_t *afl_input, size_t afl_input_sz) 
+{
+	uint8_t *data;
 	size_t data_sz;
 	int cmd;
 
@@ -796,15 +1220,87 @@ void fuzz_ta(void *afl_input, size_t afl_input_sz)
 
 	switch (cmd) {
 
-	case PKCS11_CMD_CREATE_OBJECT:
-		printf("fuzzing PKCS11_CMD_CREATE_OBJECT\n");
-		harness_PKCS11_CMD_CREATE_OBJECT(data, data_sz);
-		break;
+	// case PKCS11_CMD_CREATE_OBJECT:
+	// 	printf("fuzzing PKCS11_CMD_CREATE_OBJECT\n");
+	// 	harness_PKCS11_CMD_CREATE_OBJECT(data, data_sz);
+	// 	break;
+	
+	// // case PKCS11_CMD_DECRYPT_INIT:
+	// // 	printf("fuzzing PKCS11_CMD_DECRYPT_INIT\n");
+	// // 	harness_PKCS11_CMD_DECRYPT_INIT(data, data_sz);
+	// // 	break;
+
+	// case PKCS11_CMD_ENCRYPT_INIT:
+	// 	// does not pass if (function != PKCS11_FUNCTION_DIGEST) in entry_processing_init ?
+	// 	printf("fuzzing PKCS11_CMD_ENCRYPT_INIT\n");
+	// 	harness_PKCS11_CMD_ENCRYPT_INIT(data, data_sz);
+	// 	break;
+
+	// case PKCS11_CMD_DIGEST_INIT:
+	// 	printf("fuzzing PKCS11_CMD_DIGEST_INIT\n");
+	// 	harness_PKCS11_CMD_DIGEST_INIT(data, data_sz);
+	// 	break;
+
+	// // case PKCS11_CMD_SIGN_INIT:
+	// // 	printf("fuzzing PKCS11_CMD_SIGN_INIT\n");
+	// // 	harness_PKCS11_CMD_SIGN_INIT(data, data_sz);
+	// // 	break;
+
+	// case PKCS11_CMD_GENERATE_KEY:
+	// 	printf("fuzzing PKCS11_CMD_GENERATE_KEY\n");
+	// 	// struct b_pair buffers;
+
+	// 	// if (!split_buffer(data, data_sz, &buffers)) {
+	// 	// 	printf("failed to split BUF\n");
+	// 	// 	goto bad_out;
+	// 	// }
+
+	// 	// print_hex(buffers.b1, buffers.b1_sz);
+	// 	// print_hex(buffers.b2, buffers.b2_sz);
+		
+	// 	harness_PKCS11_CMD_GENERATE_KEY(data, data_sz);
+
+	// 	// free(buffers.b1);
+	// 	// free(buffers.b2);
+	// 	break;
+
+	// // case PKCS11_CMD_FIND_OBJECTS_INIT:
+	// // 	printf("fuzzing PKCS11_CMD_FIND_OBJECTS_INIT\n");
+	// // 	harness_PKCS11_CMD_FIND_OBJECTS_INIT(data, data_sz);
+	// // 	break;
+
+	// // case PKCS11_CMD_GET_ATTRIBUTE_VALUE:
+	// // 	printf("fuzzing PKCS11_CMD_GET_ATTRIBUTE_VALUE\n");
+	// // 	harness_PKCS11_CMD_GET_ATTRIBUTE_VALUE(data, data_sz);
+	// // 	break;
+
+	// // case PKCS11_CMD_COPY_OBJECT:
+	// // 	printf("fuzzing PKCS11_CMD_COPY_OBJECT\n");
+	// // 	harness_PKCS11_CMD_COPY_OBJECT(data, data_sz);
+	// // 	break;
+
+	// // case PKCS11_CMD_DERIVE_KEY:
+	// // 	printf("fuzzing PKCS11_CMD_DERIVE_KEY\n");
+	// // 	harness_PKCS11_CMD_DERIVE_KEY(data, data_sz);
+	// // 	break;
+
+	// case PKCS11_CMD_GENERATE_KEY_PAIR:
+	// 	printf("fuzzing PKCS11_CMD_GENERATE_KEY_PAIR\n");
+	// 	harness_PKCS11_CMD_GENERATE_KEY_PAIR(data, data_sz);
+	// 	break;
+
+	// // case PKCS11_CMD_WRAP_KEY:
+	// // 	printf("fuzzing PKCS11_CMD_WRAP_KEY\n");
+	// // 	harness_PKCS11_CMD_WRAP_KEY(data, data_sz);
+	// // 	break;
+
+	// // case PKCS11_CMD_UNWRAP_KEY:
+	// // 	printf("fuzzing PKCS11_CMD_UNWRAP_KEY\n");
+	// // 	harness_PKCS11_CMD_UNWRAP_KEY(data, data_sz);
+	// // 	break;
 
 	default:
 		printf("cmd is invalid\n");
-		if (data)
-			free(data);
 		goto bad_out;
 
 	}
@@ -815,31 +1311,24 @@ void fuzz_ta(void *afl_input, size_t afl_input_sz)
 	return;
 
 bad_out:
+	if (data)
+		free(data);
+		
 	invoke_ta_no_args();
 }
 
 
 /** ============================== main =============================== **/
 
-
-
-
-
-
-
-
 int main(int argc, char *argv[])
 {
-
-
-
 /* AFL persistent mode (input via shm), deferred forkserver */
 
 #ifdef __AFL_HAVE_MANUAL_CONTROL
 	__AFL_INIT(); // defer forkserver
 #endif
 
-	unsigned char *afl_input = __AFL_FUZZ_TESTCASE_BUF; // Shm buf. MUST be after __AFL_INIT and before AFL_LOOP!
+	uint8_t *afl_input = __AFL_FUZZ_TESTCASE_BUF; // Shm buf. MUST be after __AFL_INIT and before AFL_LOOP!
 
 // 	/* AFL loop */
 	while(__AFL_LOOP(10000)) {
@@ -847,7 +1336,6 @@ int main(int argc, char *argv[])
 
 		printf("***************************************\n");
 
-		// print_hex(afl_input, afl_input_sz);
 		fuzz_ta(afl_input, afl_input_sz);
 
 		printf("***************************************\n");

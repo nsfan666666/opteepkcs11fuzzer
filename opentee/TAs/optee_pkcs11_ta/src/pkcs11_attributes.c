@@ -5,14 +5,13 @@
 
 #include <assert.h>
 #include <inttypes.h>
-#include "pkcs11_ta.h"
+#include <pkcs11_ta.h>
 #include <stdlib.h>
-#include "string_ext.h"
-#include "tee_internal_api_extensions.h"
-#include "tee_internal_api.h" // opentee
-//#include <trace.h>
-#include "tee_logging.h"
-#include "util.h"
+#include <string_ext.h>
+#include <tee_internal_api_extensions.h>
+#include <tee_internal_api.h>
+#include <trace.h>
+#include <util.h>
 
 #include "attributes.h"
 #include "handle.h"
@@ -90,7 +89,7 @@ check_mechanism_against_processing(struct pkcs11_session *session,
 
 		if (session->processing->step == PKCS11_FUNC_STEP_UPDATE ||
 		    session->processing->step == PKCS11_FUNC_STEP_FINAL) {
-			OT_LOG(LOG_ERR, "Cannot perform one-shot on active processing");
+			EMSG("Cannot perform one-shot on active processing");
 			return PKCS11_CKR_OPERATION_ACTIVE;
 		}
 
@@ -104,7 +103,7 @@ check_mechanism_against_processing(struct pkcs11_session *session,
 
 		if (session->processing->step == PKCS11_FUNC_STEP_ONESHOT ||
 		    session->processing->step == PKCS11_FUNC_STEP_FINAL) {
-			OT_LOG(LOG_ERR, "Cannot perform update on finalized processing");
+			EMSG("Cannot perform update on finalized processing");
 			return PKCS11_CKR_OPERATION_ACTIVE;
 		}
 
@@ -127,7 +126,7 @@ check_mechanism_against_processing(struct pkcs11_session *session,
 			return PKCS11_CKR_USER_NOT_LOGGED_IN;
 
 		if (session->processing->step == PKCS11_FUNC_STEP_ONESHOT) {
-			OT_LOG(LOG_ERR, "Cannot perform final on oneshot processing");
+			EMSG("Cannot perform final on oneshot processing");
 			return PKCS11_CKR_OPERATION_ACTIVE;
 		}
 		return PKCS11_CKR_OK;
@@ -138,7 +137,7 @@ check_mechanism_against_processing(struct pkcs11_session *session,
 	}
 
 	if (!allowed) {
-		OT_LOG(LOG_ERR, "Processing %#x/%s not permitted (%u/%u)",
+		EMSG("Processing %#x/%s not permitted (%u/%u)",
 		     (unsigned int)mechanism_type, id2str_proc(mechanism_type),
 		     function, step);
 		return PKCS11_CKR_MECHANISM_INVALID;
@@ -181,7 +180,7 @@ static uint8_t *pkcs11_object_default_boolprop(uint32_t attribute)
 	case PKCS11_CKA_TRUSTED:
 		return (uint8_t *)&bool_false;
 	default:
-		//printf("No default for boolprop attribute %#"PRIx32, attribute);
+		DMSG("No default for boolprop attribute %#"PRIx32, attribute);
 		return NULL;
 	}
 }
@@ -471,6 +470,12 @@ static const uint32_t ec_private_key_opt_or_null[] = {
 	PKCS11_CKA_VALUE,
 };
 
+static const uint32_t eddsa_private_key_opt_or_null[] = {
+	PKCS11_CKA_EC_PARAMS,
+	PKCS11_CKA_VALUE,
+	PKCS11_CKA_EC_POINT,
+};
+
 static enum pkcs11_rc create_storage_attributes(struct obj_attrs **out,
 						struct obj_attrs *temp)
 {
@@ -484,7 +489,7 @@ static enum pkcs11_rc create_storage_attributes(struct obj_attrs **out,
 	/* Object class is mandatory */
 	class = get_class(temp);
 	if (class == PKCS11_CKO_UNDEFINED_ID) {
-		OT_LOG(LOG_ERR, "Class attribute not found");
+		EMSG("Class attribute not found");
 
 		return PKCS11_CKR_TEMPLATE_INCONSISTENT;
 	}
@@ -513,7 +518,7 @@ static enum pkcs11_rc create_genkey_attributes(struct obj_attrs **out,
 
 	type = get_key_type(temp);
 	if (type == PKCS11_CKK_UNDEFINED_ID) {
-		OT_LOG(LOG_ERR, "Key type attribute not found");
+		EMSG("Key type attribute not found");
 
 		return PKCS11_CKR_TEMPLATE_INCONSISTENT;
 	}
@@ -560,7 +565,7 @@ static enum pkcs11_rc create_symm_key_attributes(struct obj_attrs **out,
 	case PKCS11_CKK_SHA224_HMAC:
 		break;
 	default:
-		OT_LOG(LOG_ERR, "Invalid key type %#"PRIx32"/%s",
+		EMSG("Invalid key type %#"PRIx32"/%s",
 		     get_key_type(*out), id2str_key_type(get_key_type(*out)));
 
 		return PKCS11_CKR_TEMPLATE_INCONSISTENT;
@@ -643,7 +648,7 @@ static enum pkcs11_rc create_certificate_attributes(struct obj_attrs **out,
 		optional_count = ARRAY_SIZE(pkcs11_x509_certificate_optional);
 		break;
 	default:
-		OT_LOG(LOG_ERR, "Invalid certificate type %#"PRIx32"/%s",
+		EMSG("Invalid certificate type %#"PRIx32"/%s",
 		     get_certificate_type(*out),
 		     id2str_certificate_type(get_certificate_type(*out)));
 
@@ -672,7 +677,7 @@ static enum pkcs11_rc create_certificate_attributes(struct obj_attrs **out,
 		case PKCS11_CK_CERTIFICATE_CATEGORY_OTHER_ENTITY:
 			break;
 		default:
-			OT_LOG(LOG_ERR, "Invalid certificate category %#"PRIx32,
+			EMSG("Invalid certificate category %#"PRIx32,
 			     cert_category);
 
 			return PKCS11_CKR_ATTRIBUTE_VALUE_INVALID;
@@ -686,7 +691,7 @@ static enum pkcs11_rc create_certificate_attributes(struct obj_attrs **out,
 			return rc;
 	} else {
 		/* All other cases are errors */
-		OT_LOG(LOG_ERR, "Invalid certificate category");
+		EMSG("Invalid certificate category");
 
 		return PKCS11_CKR_TEMPLATE_INCONSISTENT;
 	}
@@ -705,7 +710,7 @@ static enum pkcs11_rc create_certificate_attributes(struct obj_attrs **out,
 			return rc;
 	} else {
 		/* All other cases are errors */
-		OT_LOG(LOG_ERR, "Invalid name hash algorithm");
+		EMSG("Invalid name hash algorithm");
 
 		return PKCS11_CKR_TEMPLATE_INCONSISTENT;
 	}
@@ -761,20 +766,21 @@ static enum pkcs11_rc create_pub_key_attributes(struct obj_attrs **out,
 			mandated_count = ARRAY_SIZE(rsa_pub_key_create_mand);
 			break;
 		default:
-			OT_LOG(LOG_ERR, "Unsupported function %#"PRIx32"/%s", function,
+			EMSG("Unsupported function %#"PRIx32"/%s", function,
 			     id2str_function(function));
 
 			return PKCS11_CKR_TEMPLATE_INCONSISTENT;
 		}
 		break;
 	case PKCS11_CKK_EC:
+	case PKCS11_CKK_EC_EDWARDS:
 		mandated = ec_public_key_mandated;
 		oon = ec_public_key_opt_or_null;
 		mandated_count = ARRAY_SIZE(ec_public_key_mandated);
 		oon_count = ARRAY_SIZE(ec_public_key_opt_or_null);
 		break;
 	default:
-		OT_LOG(LOG_ERR, "Invalid key type %#"PRIx32"/%s",
+		EMSG("Invalid key type %#"PRIx32"/%s",
 		     get_key_type(*out), id2str_key_type(get_key_type(*out)));
 
 		return PKCS11_CKR_TEMPLATE_INCONSISTENT;
@@ -830,8 +836,14 @@ static enum pkcs11_rc create_priv_key_attributes(struct obj_attrs **out,
 		mandated_count = ARRAY_SIZE(ec_private_key_mandated);
 		oon_count = ARRAY_SIZE(ec_private_key_opt_or_null);
 		break;
+	case PKCS11_CKK_EC_EDWARDS:
+		mandated = ec_private_key_mandated;
+		oon = eddsa_private_key_opt_or_null;
+		mandated_count = ARRAY_SIZE(ec_private_key_mandated);
+		oon_count = ARRAY_SIZE(eddsa_private_key_opt_or_null);
+		break;
 	default:
-		OT_LOG(LOG_ERR, "Invalid key type %#"PRIx32"/%s",
+		EMSG("Invalid key type %#"PRIx32"/%s",
 		     get_key_type(*out), id2str_key_type(get_key_type(*out)));
 
 		return PKCS11_CKR_TEMPLATE_INCONSISTENT;
@@ -885,7 +897,7 @@ sanitize_symm_key_attributes(struct obj_attrs **temp,
 		}
 		break;
 	default:
-		OT_LOG(LOG_ERR, "Invalid key type %#"PRIx32"/%s",
+		EMSG("Invalid key type %#"PRIx32"/%s",
 		     get_key_type(*temp), id2str_key_type(get_key_type(*temp)));
 
 		return PKCS11_CKR_TEMPLATE_INCONSISTENT;
@@ -979,6 +991,10 @@ create_attributes_from_template(struct obj_attrs **out, void *template,
 	 */
 	if (function == PKCS11_FUNCTION_GENERATE_PAIR) {
 		switch (mecha) {
+		case PKCS11_CKM_EC_EDWARDS_KEY_PAIR_GEN:
+			class = template_class;
+			type = PKCS11_CKK_EDDSA;
+			break;
 		case PKCS11_CKM_EC_KEY_PAIR_GEN:
 			class = template_class;
 			type = PKCS11_CKK_EC;
@@ -1056,6 +1072,14 @@ create_attributes_from_template(struct obj_attrs **out, void *template,
 			goto out;
 		}
 		break;
+	case PKCS11_CKM_EC_EDWARDS_KEY_PAIR_GEN:
+		if ((get_class(temp) != PKCS11_CKO_PUBLIC_KEY &&
+		     get_class(temp) != PKCS11_CKO_PRIVATE_KEY) ||
+		    get_key_type(temp) != PKCS11_CKK_EC_EDWARDS) {
+			rc = PKCS11_CKR_TEMPLATE_INCONSISTENT;
+			goto out;
+		}
+		break;
 	case PKCS11_CKM_RSA_PKCS_KEY_PAIR_GEN:
 		if ((get_class(temp) != PKCS11_CKO_PUBLIC_KEY &&
 		     get_class(temp) != PKCS11_CKO_PRIVATE_KEY) ||
@@ -1069,7 +1093,7 @@ create_attributes_from_template(struct obj_attrs **out, void *template,
 	}
 
 	if (!sanitize_consistent_class_and_type(temp)) {
-		OT_LOG(LOG_ERR, "Inconsistent class/type");
+		EMSG("Inconsistent class/type");
 		rc = PKCS11_CKR_TEMPLATE_INCONSISTENT;
 		goto out;
 	}
@@ -1102,8 +1126,8 @@ create_attributes_from_template(struct obj_attrs **out, void *template,
 		rc = create_priv_key_attributes(&attrs, temp);
 		break;
 	default:
-		//printf("Invalid object class %#"PRIx32"/%s",
-		   //  get_class(temp), id2str_class(get_class(temp)));
+		DMSG("Invalid object class %#"PRIx32"/%s",
+		     get_class(temp), id2str_class(get_class(temp)));
 
 		rc = PKCS11_CKR_TEMPLATE_INCONSISTENT;
 		break;
@@ -1231,18 +1255,18 @@ static enum pkcs11_rc check_attrs_misc_integrity(struct obj_attrs *head)
 {
 	if (get_bool(head, PKCS11_CKA_NEVER_EXTRACTABLE) &&
 	    get_bool(head, PKCS11_CKA_EXTRACTABLE)) {
-		//printf("Never/Extractable attributes mismatch %d/%d",
-		  //   get_bool(head, PKCS11_CKA_NEVER_EXTRACTABLE),
-		    // get_bool(head, PKCS11_CKA_EXTRACTABLE));
+		DMSG("Never/Extractable attributes mismatch %d/%d",
+		     get_bool(head, PKCS11_CKA_NEVER_EXTRACTABLE),
+		     get_bool(head, PKCS11_CKA_EXTRACTABLE));
 
 		return PKCS11_CKR_TEMPLATE_INCONSISTENT;
 	}
 
 	if (get_bool(head, PKCS11_CKA_ALWAYS_SENSITIVE) &&
 	    !get_bool(head, PKCS11_CKA_SENSITIVE)) {
-		//printf("Sensitive/always attributes mismatch %d/%d",
-		     //get_bool(head, PKCS11_CKA_SENSITIVE),
-		     //get_bool(head, PKCS11_CKA_ALWAYS_SENSITIVE));
+		DMSG("Sensitive/always attributes mismatch %d/%d",
+		     get_bool(head, PKCS11_CKA_SENSITIVE),
+		     get_bool(head, PKCS11_CKA_ALWAYS_SENSITIVE));
 
 		return PKCS11_CKR_TEMPLATE_INCONSISTENT;
 	}
@@ -1292,7 +1316,7 @@ enum pkcs11_rc check_access_attrs_against_token(struct pkcs11_session *session,
 
 	if (private && (pkcs11_session_is_public(session) ||
 			pkcs11_session_is_so(session))) {
-		//printf("Private object access from a public or SO session");
+		DMSG("Private object access from a public or SO session");
 
 		return PKCS11_CKR_USER_NOT_LOGGED_IN;
 	}
@@ -1314,14 +1338,14 @@ enum pkcs11_rc check_created_attrs_against_token(struct pkcs11_session *session,
 
 	if (get_bool(head, PKCS11_CKA_TRUSTED) &&
 	    !pkcs11_session_is_so(session)) {
-		//printf("Can't create trusted object");
+		DMSG("Can't create trusted object");
 
 		return PKCS11_CKR_KEY_FUNCTION_NOT_PERMITTED;
 	}
 
 	if (get_bool(head, PKCS11_CKA_TOKEN) &&
 	    !pkcs11_session_is_read_write(session)) {
-		//printf("Can't create persistent object");
+		DMSG("Can't create persistent object");
 
 		return PKCS11_CKR_SESSION_READ_ONLY;
 	}
@@ -1332,17 +1356,19 @@ enum pkcs11_rc check_created_attrs_against_token(struct pkcs11_session *session,
 	return PKCS11_CKR_OK;
 }
 
-#define printf_BAD_BBOOL(attr, proc, head)				\
+#define DMSG_BAD_BBOOL(attr, proc, head)				\
 	do {								\
-		uint32_t __attribute__((unused)) _attr = (attr);			\
-		uint8_t __attribute__((unused)) _bvalue = 0;			\
-		enum pkcs11_rc __attribute__((unused)) _rc = PKCS11_CKR_OK;	\
+		uint32_t __maybe_unused _attr = (attr);			\
+		uint8_t __maybe_unused _bvalue = 0;			\
+		enum pkcs11_rc __maybe_unused _rc = PKCS11_CKR_OK;	\
 									\
 		_rc = get_attribute((head), _attr, &_bvalue, NULL);	\
-			\
+		DMSG("%s issue for %s: %sfound, value %"PRIu8,		\
+		     id2str_attr(_attr), id2str_proc((proc)),		\
+		     _rc ? "not " : "", _bvalue);			\
 	} while (0)
 
-static bool __attribute__((unused)) check_attr_bval(uint32_t proc_id __attribute__((unused)),
+static bool __maybe_unused check_attr_bval(uint32_t proc_id __maybe_unused,
 					   struct obj_attrs *head,
 					   uint32_t attribute, bool val)
 {
@@ -1352,7 +1378,7 @@ static bool __attribute__((unused)) check_attr_bval(uint32_t proc_id __attribute
 	if (!get_attribute(head, attribute, &bbool, &sz) && !!bbool == val)
 		return true;
 
-	printf_BAD_BBOOL(attribute, proc_id, head);
+	DMSG_BAD_BBOOL(attribute, proc_id, head);
 	return false;
 }
 
@@ -1372,6 +1398,7 @@ enum pkcs11_rc check_created_attrs_against_processing(uint32_t proc_id,
 	 */
 	switch (proc_id) {
 	case PKCS11_PROCESSING_IMPORT:
+	case PKCS11_CKM_ECDH1_DERIVE:
 	case PKCS11_CKM_AES_ECB:
 	case PKCS11_CKM_AES_CBC:
 	case PKCS11_CKM_AES_ECB_ENCRYPT_DATA:
@@ -1380,6 +1407,7 @@ enum pkcs11_rc check_created_attrs_against_processing(uint32_t proc_id,
 		break;
 	case PKCS11_CKM_GENERIC_SECRET_KEY_GEN:
 	case PKCS11_CKM_AES_KEY_GEN:
+	case PKCS11_CKM_EC_EDWARDS_KEY_PAIR_GEN:
 	case PKCS11_CKM_EC_KEY_PAIR_GEN:
 	case PKCS11_CKM_RSA_PKCS_KEY_PAIR_GEN:
 		assert(check_attr_bval(proc_id, head, PKCS11_CKA_LOCAL, true));
@@ -1396,6 +1424,9 @@ enum pkcs11_rc check_created_attrs_against_processing(uint32_t proc_id,
 	case PKCS11_CKM_AES_KEY_GEN:
 		assert(get_key_type(head) == PKCS11_CKK_AES);
 		break;
+	case PKCS11_CKM_EC_EDWARDS_KEY_PAIR_GEN:
+		assert(get_key_type(head) == PKCS11_CKK_EC_EDWARDS);
+		break;
 	case PKCS11_CKM_EC_KEY_PAIR_GEN:
 		assert(get_key_type(head) == PKCS11_CKK_EC);
 		break;
@@ -1403,6 +1434,7 @@ enum pkcs11_rc check_created_attrs_against_processing(uint32_t proc_id,
 		assert(get_key_type(head) == PKCS11_CKK_RSA);
 		break;
 	case PKCS11_PROCESSING_IMPORT:
+	case PKCS11_CKM_ECDH1_DERIVE:
 	default:
 		break;
 	}
@@ -1444,6 +1476,9 @@ static void get_key_min_max_sizes(enum pkcs11_key_type key_type,
 		break;
 	case PKCS11_CKK_EC:
 		mechanism = PKCS11_CKM_EC_KEY_PAIR_GEN;
+		break;
+	case PKCS11_CKK_EDDSA:
+		mechanism = PKCS11_CKM_EC_EDWARDS_KEY_PAIR_GEN;
 		break;
 	case PKCS11_CKK_RSA:
 		mechanism = PKCS11_CKM_RSA_PKCS_KEY_PAIR_GEN;
@@ -1536,6 +1571,7 @@ enum pkcs11_rc check_created_attrs(struct obj_attrs *key1,
 			key_length = ROUNDUP(key_length, 8) / 8;
 			break;
 		case PKCS11_CKK_EC:
+		case PKCS11_CKK_EC_EDWARDS:
 			break;
 		default:
 			return PKCS11_CKR_TEMPLATE_INCONSISTENT;
@@ -1545,6 +1581,7 @@ enum pkcs11_rc check_created_attrs(struct obj_attrs *key1,
 		switch (get_key_type(private)) {
 		case PKCS11_CKK_RSA:
 		case PKCS11_CKK_EC:
+		case PKCS11_CKK_EC_EDWARDS:
 			break;
 		default:
 			return PKCS11_CKR_TEMPLATE_INCONSISTENT;
@@ -1557,6 +1594,7 @@ enum pkcs11_rc check_created_attrs(struct obj_attrs *key1,
 	 */
 	switch (get_key_type(key1)) {
 	case PKCS11_CKK_EC:
+	case PKCS11_CKK_EC_EDWARDS:
 		return PKCS11_CKR_OK;
 	default:
 		break;
@@ -1564,7 +1602,7 @@ enum pkcs11_rc check_created_attrs(struct obj_attrs *key1,
 
 	get_key_min_max_sizes(get_key_type(key1), &min_key_size, &max_key_size);
 	if (key_length < min_key_size || key_length > max_key_size) {
-		OT_LOG(LOG_ERR, "Length %"PRIu32" vs range [%"PRIu32" %"PRIu32"]",
+		EMSG("Length %"PRIu32" vs range [%"PRIu32" %"PRIu32"]",
 		     key_length, min_key_size, max_key_size);
 
 		return PKCS11_CKR_KEY_SIZE_RANGE;
@@ -1593,7 +1631,7 @@ static bool parent_key_complies_allowed_processings(uint32_t proc_id,
 	if (rc == PKCS11_RV_NOT_FOUND)
 		return true;
 	if (rc) {
-		OT_LOG(LOG_ERR, "unexpected attributes state");
+		EMSG("unexpected attributes state");
 		TEE_Panic(TEE_ERROR_BAD_STATE);
 	}
 
@@ -1605,7 +1643,7 @@ static bool parent_key_complies_allowed_processings(uint32_t proc_id,
 			return true;
 	}
 
-	//printf("can't find %s in allowed list", id2str_proc(proc_id));
+	DMSG("can't find %s in allowed list", id2str_proc(proc_id));
 	return false;
 }
 
@@ -1641,7 +1679,7 @@ check_parent_attrs_against_processing(enum pkcs11_mechanism_id proc_id,
 	enum pkcs11_attr_id attr = func_to_attr(function);
 
 	if (!get_bool(head, attr)) {
-		//printf("%s not permitted", id2str_attr(attr));
+		DMSG("%s not permitted", id2str_attr(attr));
 		return PKCS11_CKR_KEY_FUNCTION_NOT_PERMITTED;
 	}
 
@@ -1649,7 +1687,6 @@ check_parent_attrs_against_processing(enum pkcs11_mechanism_id proc_id,
 	switch (proc_id) {
 	case PKCS11_CKM_AES_ECB:
 	case PKCS11_CKM_AES_CBC:
-	case PKCS11_CKM_AES_CBC_PAD:
 	case PKCS11_CKM_AES_CTS:
 	case PKCS11_CKM_AES_CTR:
 	case PKCS11_CKM_AES_CMAC:
@@ -1658,8 +1695,8 @@ check_parent_attrs_against_processing(enum pkcs11_mechanism_id proc_id,
 		    key_type == PKCS11_CKK_AES)
 			break;
 
-		//printf("%s invalid key %s/%s", id2str_proc(proc_id),
-		  //   id2str_class(key_class), id2str_key_type(key_type));
+		DMSG("%s invalid key %s/%s", id2str_proc(proc_id),
+		     id2str_class(key_class), id2str_key_type(key_type));
 
 		if (function == PKCS11_FUNCTION_WRAP)
 			return PKCS11_CKR_WRAPPING_KEY_TYPE_INCONSISTENT;
@@ -1740,14 +1777,31 @@ check_parent_attrs_against_processing(enum pkcs11_mechanism_id proc_id,
 		}
 		break;
 
+	case PKCS11_CKM_EDDSA:
+		if (key_type != PKCS11_CKK_EC_EDWARDS) {
+			EMSG("Invalid key %s for mechanism %s",
+			     id2str_type(key_type, key_class),
+			     id2str_proc(proc_id));
+			return PKCS11_CKR_KEY_TYPE_INCONSISTENT;
+		}
+		if (key_class != PKCS11_CKO_PUBLIC_KEY &&
+		    key_class != PKCS11_CKO_PRIVATE_KEY) {
+			EMSG("Invalid key class for mechanism %s",
+			     id2str_proc(proc_id));
+
+			return PKCS11_CKR_KEY_FUNCTION_NOT_PERMITTED;
+		}
+		break;
+
 	case PKCS11_CKM_ECDSA:
 	case PKCS11_CKM_ECDSA_SHA1:
 	case PKCS11_CKM_ECDSA_SHA224:
 	case PKCS11_CKM_ECDSA_SHA256:
 	case PKCS11_CKM_ECDSA_SHA384:
 	case PKCS11_CKM_ECDSA_SHA512:
+	case PKCS11_CKM_ECDH1_DERIVE:
 		if (key_type != PKCS11_CKK_EC) {
-			OT_LOG(LOG_ERR, "Invalid key %s for mechanism %s",
+			EMSG("Invalid key %s for mechanism %s",
 			     id2str_type(key_type, key_class),
 			     id2str_proc(proc_id));
 
@@ -1755,7 +1809,7 @@ check_parent_attrs_against_processing(enum pkcs11_mechanism_id proc_id,
 		}
 		if (key_class != PKCS11_CKO_PUBLIC_KEY &&
 		    key_class != PKCS11_CKO_PRIVATE_KEY) {
-			OT_LOG(LOG_ERR, "Invalid key class for mechanism %s",
+			EMSG("Invalid key class for mechanism %s",
 			     id2str_proc(proc_id));
 
 			return PKCS11_CKR_KEY_FUNCTION_NOT_PERMITTED;
@@ -1776,7 +1830,7 @@ check_parent_attrs_against_processing(enum pkcs11_mechanism_id proc_id,
 	case PKCS11_CKM_SHA384_RSA_PKCS_PSS:
 	case PKCS11_CKM_SHA512_RSA_PKCS_PSS:
 		if (key_type != PKCS11_CKK_RSA) {
-			OT_LOG(LOG_ERR, "Invalid key %s for mechanism %s",
+			EMSG("Invalid key %s for mechanism %s",
 			     id2str_type(key_type, key_class),
 			     id2str_proc(proc_id));
 
@@ -1784,21 +1838,21 @@ check_parent_attrs_against_processing(enum pkcs11_mechanism_id proc_id,
 		}
 		if (key_class != PKCS11_CKO_PUBLIC_KEY &&
 		    key_class != PKCS11_CKO_PRIVATE_KEY) {
-			OT_LOG(LOG_ERR, "Invalid key class for mechanism %s",
+			EMSG("Invalid key class for mechanism %s",
 			     id2str_proc(proc_id));
 
 			return PKCS11_CKR_KEY_FUNCTION_NOT_PERMITTED;
 		}
 		break;
 	default:
-		//printf("Invalid processing %#"PRIx32"/%s", proc_id,
-		     //id2str_proc(proc_id));
+		DMSG("Invalid processing %#"PRIx32"/%s", proc_id,
+		     id2str_proc(proc_id));
 
 		return PKCS11_CKR_MECHANISM_INVALID;
 	}
 
 	if (!parent_key_complies_allowed_processings(proc_id, head)) {
-		//printf("Allowed mechanism failed");
+		DMSG("Allowed mechanism failed");
 		return PKCS11_CKR_KEY_FUNCTION_NOT_PERMITTED;
 	}
 
@@ -1889,7 +1943,7 @@ static bool attr_is_modifiable_secret_key(struct pkcs11_attribute_head *attr,
 
 static bool attr_is_modifiable_public_key(struct pkcs11_attribute_head *attr,
 					  struct pkcs11_session *session,
-					  struct pkcs11_object *obj __attribute__((unused)))
+					  struct pkcs11_object *obj __unused)
 {
 	switch (attr->id) {
 	case PKCS11_CKA_SUBJECT:
@@ -1907,7 +1961,7 @@ static bool attr_is_modifiable_public_key(struct pkcs11_attribute_head *attr,
 }
 
 static bool attr_is_modifiable_private_key(struct pkcs11_attribute_head *attr,
-					   struct pkcs11_session *sess __attribute__((unused)),
+					   struct pkcs11_session *sess __unused,
 					   struct pkcs11_object *obj)
 {
 	switch (attr->id) {
@@ -2104,7 +2158,7 @@ enum pkcs11_rc check_attrs_against_modification(struct pkcs11_session *session,
 		if (cli_ref.id == PKCS11_CKA_TOKEN &&
 		    get_bool(head, PKCS11_CKA_TOKEN)) {
 			if (!pkcs11_session_is_read_write(session)) {
-				//printf("Can't copy to token in a RO session");
+				DMSG("Can't copy to token in a RO session");
 				return PKCS11_CKR_SESSION_READ_ONLY;
 			}
 		}

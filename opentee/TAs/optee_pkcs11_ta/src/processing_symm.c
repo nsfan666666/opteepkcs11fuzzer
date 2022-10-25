@@ -4,13 +4,13 @@
  */
 
 #include <assert.h>
-#include "pkcs11_ta.h"
+#include <pkcs11_ta.h>
 #include <string.h>
-#include "tee_api_defines.h"
-#include "tee_internal_api.h" // opentee
-#include "tee_internal_api_extensions.h"
-#include "utee_defines.h"
-#include "util.h"
+#include <tee_api_defines.h>
+#include <tee_internal_api.h>
+#include <tee_internal_api_extensions.h>
+#include <utee_defines.h>
+#include <util.h>
 
 #include "attributes.h"
 #include "object.h"
@@ -19,8 +19,6 @@
 #include "pkcs11_token.h"
 #include "processing.h"
 #include "serializer.h"
-
-#include "tee_logging.h"
 
 struct input_data_ref {
 	size_t size;
@@ -48,7 +46,6 @@ bool processing_is_tee_symm(enum pkcs11_mechanism_id proc_id)
 	/* Ciphering */
 	case PKCS11_CKM_AES_ECB:
 	case PKCS11_CKM_AES_CBC:
-	case PKCS11_CKM_AES_CBC_PAD:
 	case PKCS11_CKM_AES_CTS:
 	case PKCS11_CKM_AES_CTR:
 	case PKCS11_CKM_AES_ECB_ENCRYPT_DATA:
@@ -69,7 +66,6 @@ pkcs2tee_algorithm(uint32_t *tee_id, struct pkcs11_attribute_head *proc_params)
 		/* AES flavors */
 		{ PKCS11_CKM_AES_ECB, TEE_ALG_AES_ECB_NOPAD },
 		{ PKCS11_CKM_AES_CBC, TEE_ALG_AES_CBC_NOPAD },
-		{ PKCS11_CKM_AES_CBC_PAD, TEE_ALG_AES_CBC_NOPAD },
 		{ PKCS11_CKM_AES_ECB_ENCRYPT_DATA, TEE_ALG_AES_ECB_NOPAD },
 		{ PKCS11_CKM_AES_CBC_ENCRYPT_DATA, TEE_ALG_AES_CBC_NOPAD },
 		{ PKCS11_CKM_AES_CTR, TEE_ALG_AES_CTR },
@@ -260,9 +256,9 @@ allocate_tee_operation(struct pkcs11_session *session,
 
 	res = TEE_AllocateOperation(&session->processing->tee_op_handle,
 				    algo, mode, size);
+
 	if (res)
-		OT_LOG(LOG_ERR, "TEE_AllocateOp. failed %#"PRIx32" %#"PRIx32" %#"PRIx32,
-		     algo, mode, size);
+		EMSG("TEE_AllocateOp. failed %#"PRIx32" %#"PRIx32" %#"PRIx32, algo, mode, size);
 
 	if (res == TEE_ERROR_NOT_SUPPORTED)
 		return PKCS11_CKR_MECHANISM_INVALID;
@@ -278,7 +274,7 @@ static enum pkcs11_rc hash_secret_helper(enum pkcs11_mechanism_id mech_id,
 {
 	uint32_t algo = 0;
 	void *hash_ptr = NULL;
-	uint32_t hash_size = 0;
+	size_t hash_size = 0; // ! ### uint32_t hash_size = 0; 
 	enum pkcs11_rc rc = PKCS11_CKR_OK;
 
 	rc = hmac_to_tee_hash(&algo, mech_id);
@@ -294,7 +290,7 @@ static enum pkcs11_rc hash_secret_helper(enum pkcs11_mechanism_id mech_id,
 				       PKCS11_CKA_VALUE, algo, hash_ptr,
 				       &hash_size);
 	if (rc) {
-		OT_LOG(LOG_ERR, "No secret/hash error");
+		EMSG("No secret/hash error");
 		TEE_Free(hash_ptr);
 		return rc;
 	}
@@ -371,7 +367,7 @@ static enum pkcs11_rc load_tee_key(struct pkcs11_session *session,
 						TEE_ATTR_SECRET_VALUE,
 						obj,
 						PKCS11_CKA_VALUE)) {
-				OT_LOG(LOG_ERR, "No secret found");
+				EMSG("No secret found");
 				return PKCS11_CKR_FUNCTION_FAILED;
 			}
 		}
@@ -384,7 +380,7 @@ static enum pkcs11_rc load_tee_key(struct pkcs11_session *session,
 
 		if (!pkcs2tee_load_attr(&tee_attr, TEE_ATTR_SECRET_VALUE,
 					obj, PKCS11_CKA_VALUE)) {
-			OT_LOG(LOG_ERR, "No secret found");
+			EMSG("No secret found");
 			return PKCS11_CKR_FUNCTION_FAILED;
 		}
 		break;
@@ -393,13 +389,13 @@ static enum pkcs11_rc load_tee_key(struct pkcs11_session *session,
 	res = TEE_AllocateTransientObject(tee_key_type, object_size,
 					  &obj->key_handle);
 	if (res) {
-		//printf("TEE_AllocateTransientObject failed, %#"PRIx32, res);
+		DMSG("TEE_AllocateTransientObject failed, %#"PRIx32, res);
 		return tee2pkcs_error(res);
 	}
 
 	res = TEE_PopulateTransientObject(obj->key_handle, &tee_attr, 1);
 	if (res) {
-		//printf("TEE_PopulateTransientObject failed, %#"PRIx32, res);
+		DMSG("TEE_PopulateTransientObject failed, %#"PRIx32, res);
 		goto error;
 	}
 
@@ -407,7 +403,7 @@ key_ready:
 	res = TEE_SetOperationKey(session->processing->tee_op_handle,
 				  obj->key_handle);
 	if (res) {
-		//printf("TEE_SetOperationKey failed, %#"PRIx32, res);
+		DMSG("TEE_SetOperationKey failed, %#"PRIx32, res);
 		goto error;
 	}
 
@@ -586,7 +582,6 @@ init_tee_operation(struct pkcs11_session *session,
 		rc = PKCS11_CKR_OK;
 		break;
 	case PKCS11_CKM_AES_CBC:
-	case PKCS11_CKM_AES_CBC_PAD:
 	case PKCS11_CKM_AES_CTS:
 		if (proc_params->size != 16)
 			return PKCS11_CKR_MECHANISM_PARAM_INVALID;
@@ -643,11 +638,6 @@ static enum pkcs11_rc input_data_size_is_valid(struct active_processing *proc,
 		if (function == PKCS11_FUNCTION_ENCRYPT &&
 		    in_size % TEE_AES_BLOCK_SIZE)
 			return PKCS11_CKR_DATA_LEN_RANGE;
-		if (function == PKCS11_FUNCTION_DECRYPT &&
-		    in_size % TEE_AES_BLOCK_SIZE)
-			return PKCS11_CKR_ENCRYPTED_DATA_LEN_RANGE;
-		break;
-	case PKCS11_CKM_AES_CBC_PAD:
 		if (function == PKCS11_FUNCTION_DECRYPT &&
 		    in_size % TEE_AES_BLOCK_SIZE)
 			return PKCS11_CKR_ENCRYPTED_DATA_LEN_RANGE;
@@ -792,7 +782,7 @@ enum pkcs11_rc step_symm_operation(struct pkcs11_session *session,
 			break;
 
 		if (!in_buf) {
-			//printf("No input data");
+			DMSG("No input data");
 			return PKCS11_CKR_ARGUMENTS_BAD;
 		}
 
@@ -810,7 +800,6 @@ enum pkcs11_rc step_symm_operation(struct pkcs11_session *session,
 
 	case PKCS11_CKM_AES_ECB:
 	case PKCS11_CKM_AES_CBC:
-	case PKCS11_CKM_AES_CBC_PAD:
 	case PKCS11_CKM_AES_CTS:
 	case PKCS11_CKM_AES_CTR:
 		if (step == PKCS11_FUNC_STEP_FINAL ||
@@ -818,7 +807,7 @@ enum pkcs11_rc step_symm_operation(struct pkcs11_session *session,
 			break;
 
 		if (!in_buf) {
-			OT_LOG(LOG_ERR, "No input data");
+			EMSG("No input data");
 			return PKCS11_CKR_ARGUMENTS_BAD;
 		}
 
@@ -921,8 +910,7 @@ enum pkcs11_rc step_symm_operation(struct pkcs11_session *session,
 						  &computed_mac_size);
 
 			if (!in2_size || in2_size > computed_mac_size) {
-				OT_LOG(LOG_ERR, "Invalid signature size: %"PRIu32,
-				     in2_size);
+				EMSG("Invalid signature size: %"PRIu32, in2_size);
 				return PKCS11_CKR_SIGNATURE_LEN_RANGE;
 			}
 
@@ -949,11 +937,10 @@ enum pkcs11_rc step_symm_operation(struct pkcs11_session *session,
 
 	case PKCS11_CKM_AES_ECB:
 	case PKCS11_CKM_AES_CBC:
-	case PKCS11_CKM_AES_CBC_PAD:
 	case PKCS11_CKM_AES_CTS:
 	case PKCS11_CKM_AES_CTR:
 		if (step == PKCS11_FUNC_STEP_ONESHOT && !in_buf) {
-			OT_LOG(LOG_ERR, "No input data");
+			EMSG("No input data");
 			return PKCS11_CKR_ARGUMENTS_BAD;
 		}
 
@@ -1123,7 +1110,7 @@ enum pkcs11_rc unwrap_key_by_symm(struct pkcs11_session *session, void *data,
 		res = TEE_CipherDoFinal(proc->tee_op_handle, data, data_sz,
 					NULL, out_sz);
 		if (res != TEE_ERROR_SHORT_BUFFER) {
-			//printf("TEE_CipherDoFinal() issue: %#"PRIx32, res);
+			DMSG("TEE_CipherDoFinal() issue: %#"PRIx32, res);
 			return PKCS11_CKR_GENERAL_ERROR;
 		}
 

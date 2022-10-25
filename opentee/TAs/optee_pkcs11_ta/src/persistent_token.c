@@ -4,15 +4,11 @@
  */
 
 #include <assert.h>
-#include "pkcs11_ta.h"
+#include <pkcs11_ta.h>
 #include <string.h>
-#include "string_ext.h"
-
-#include "tee_internal_api.h"
-#include "tee_internal_api_extensions.h"
-
-#include "util.h"
-#include "tee_logging.h"
+#include <string_ext.h>
+#include <tee_internal_api_extensions.h>
+#include <util.h>
 
 #include "attributes.h"
 #include "pkcs11_token.h"
@@ -42,15 +38,13 @@ static TEE_Result get_db_file_name(struct ck_token *token,
 static TEE_Result open_db_file(struct ck_token *token,
 			       TEE_ObjectHandle *out_hdl)
 {
-	char file[PERSISTENT_OBJECT_ID_LEN] = { }; // <-- FAIL
+	char file[PERSISTENT_OBJECT_ID_LEN] = { };
 	TEE_Result res = TEE_ERROR_GENERIC;
 
 	res = get_db_file_name(token, file, sizeof(file));
-
 	if (res)
 		return res;
 
-	// OT_LOG(LOG_ERR, "KZZZZZZZZZZZZZZZ2");
 	return TEE_OpenPersistentObject(TEE_STORAGE_PRIVATE, file, sizeof(file),
 					TEE_DATA_FLAG_ACCESS_READ |
 					TEE_DATA_FLAG_ACCESS_WRITE,
@@ -64,13 +58,13 @@ void update_persistent_db(struct ck_token *token)
 
 	res = open_db_file(token, &db_hdl);
 	if (res) {
-		OT_LOG(LOG_ERR, "Failed to open token persistent db: %#"PRIx32, res);
+		EMSG("Failed to open token persistent db: %#"PRIx32, res);
 		TEE_Panic(0);
 	}
 	res = TEE_WriteObjectData(db_hdl, token->db_main,
 				  sizeof(*token->db_main));
 	if (res) {
-		OT_LOG(LOG_ERR, "Failed to write to token persistent db: %#"PRIx32, res);
+		EMSG("Failed to write to token persistent db: %#"PRIx32, res);
 		TEE_Panic(0);
 	}
 
@@ -83,25 +77,16 @@ static enum pkcs11_rc do_hash(uint32_t user, const uint8_t *pin,
 {
 	TEE_Result res = TEE_SUCCESS;
 	TEE_OperationHandle oh = TEE_HANDLE_NULL;
-	uint32_t sz = TEE_MAX_HASH_SIZE;
-	OT_LOG(LOG_ERR, "entry_ck_token_initialize Inside here 16\n");
+	size_t sz = TEE_MAX_HASH_SIZE; // ! ### uint32_t sz = TEE_MAX_HASH_SIZE;
 
 	res = TEE_AllocateOperation(&oh, TEE_ALG_SHA256, TEE_MODE_DIGEST, 0);
 	if (res)
 		return tee2pkcs_error(res);
-	OT_LOG(LOG_ERR, "entry_ck_token_initialize Inside here 17\n");
 
 	TEE_DigestUpdate(oh, &user, sizeof(user));
-	OT_LOG(LOG_ERR, "entry_ck_token_initialize Inside here 18\n");
-
 	TEE_DigestUpdate(oh, &salt, sizeof(salt));
-	OT_LOG(LOG_ERR, "entry_ck_token_initialize Inside here 19\n");
-
 	res = TEE_DigestDoFinal(oh, pin, pin_size, hash, &sz);
-	OT_LOG(LOG_ERR, "entry_ck_token_initialize Inside here 20\n");
-
-	//TEE_FreeOperation(oh);
-	OT_LOG(LOG_ERR, "entry_ck_token_initialize Inside here 21\n");
+	TEE_FreeOperation(oh);
 
 	if (res)
 		return PKCS11_CKR_GENERAL_ERROR;
@@ -116,18 +101,12 @@ enum pkcs11_rc hash_pin(enum pkcs11_user_type user, const uint8_t *pin,
 {
 	enum pkcs11_rc rc = PKCS11_CKR_OK;
 	uint32_t s = 0;
-	OT_LOG(LOG_ERR, "entry_ck_token_initialize Inside here 12\n");
 
 	TEE_GenerateRandom(&s, sizeof(s));
-	OT_LOG(LOG_ERR, "entry_ck_token_initialize Inside here 13\n");
-
 	if (!s)
 		s++;
-	OT_LOG(LOG_ERR, "entry_ck_token_initialize Inside here 14\n");
 
 	rc = do_hash(user, pin, pin_size, s, hash);
-	OT_LOG(LOG_ERR, "entry_ck_token_initialize Inside here 15\n");
-
 	if (!rc)
 		*salt = s;
 	return rc;
@@ -155,11 +134,11 @@ enum pkcs11_rc setup_so_identity_auth_from_client(struct ck_token *token)
 {
 	TEE_Identity identity = { };
 	TEE_Result res = TEE_SUCCESS;
-
-	res = TEE_GetPropertyAsIdentity(TEE_PROPSET_CURRENT_CLIENT,
-					"gpd.client.identity", &identity);
+	// ! NOT SUPPORTED by Open-TEE
+	// res = TEE_GetPropertyAsIdentity(TEE_PROPSET_CURRENT_CLIENT,
+	// 				"gpd.client.identity", &identity);
 	if (res != TEE_SUCCESS) {
-		OT_LOG(LOG_ERR, "TEE_GetPropertyAsIdentity: returned %#"PRIx32, res);
+		EMSG("TEE_GetPropertyAsIdentity: returned %#"PRIx32, res);
 		return PKCS11_CKR_PIN_INVALID;
 	}
 
@@ -188,11 +167,12 @@ enum pkcs11_rc setup_identity_auth_from_pin(struct ck_token *token,
 
 	if (!pin) {
 		/* Use client identity */
-		res = TEE_GetPropertyAsIdentity(TEE_PROPSET_CURRENT_CLIENT,
-						"gpd.client.identity",
-						&identity);
+		// ! NOT SUPPORTED by Open-TEE
+		// res = TEE_GetPropertyAsIdentity(TEE_PROPSET_CURRENT_CLIENT,
+		// 				"gpd.client.identity",
+		// 				&identity);
 		if (res != TEE_SUCCESS) {
-			OT_LOG(LOG_ERR, "TEE_GetPropertyAsIdentity: returned %#"PRIx32,
+			EMSG("TEE_GetPropertyAsIdentity: returned %#"PRIx32,
 			     res);
 			return PKCS11_CKR_PIN_INVALID;
 		}
@@ -215,21 +195,21 @@ enum pkcs11_rc setup_identity_auth_from_pin(struct ck_token *token,
 			   acl_string) {
 			identity.login = TEE_LOGIN_GROUP;
 		} else {
-			OT_LOG(LOG_ERR, "Invalid PIN ACL string - login");
+			EMSG("Invalid PIN ACL string - login");
 			TEE_Free(acl_string);
 			return PKCS11_CKR_PIN_INVALID;
 		}
 
 		if (identity.login != TEE_LOGIN_PUBLIC) {
 			if (!uuid_str) {
-				OT_LOG(LOG_ERR, "Invalid PIN ACL string - colon");
+				EMSG("Invalid PIN ACL string - colon");
 				TEE_Free(acl_string);
 				return PKCS11_CKR_PIN_INVALID;
 			}
 
 			res = tee_uuid_from_str(&identity.uuid, uuid_str);
 			if (res) {
-				OT_LOG(LOG_ERR, "Invalid PIN ACL string - client id");
+				EMSG("Invalid PIN ACL string - client id");
 				TEE_Free(acl_string);
 				return PKCS11_CKR_PIN_INVALID;
 			}
@@ -281,10 +261,11 @@ enum pkcs11_rc verify_identity_auth(struct ck_token *token,
 	assert(token->db_main->flags &
 	       PKCS11_CKFT_PROTECTED_AUTHENTICATION_PATH);
 
-	res = TEE_GetPropertyAsIdentity(TEE_PROPSET_CURRENT_CLIENT,
-					"gpd.client.identity", &identity);
+	// ! NOT SUPPORTED by Open-TEE
+	// res = TEE_GetPropertyAsIdentity(TEE_PROPSET_CURRENT_CLIENT,
+	// 				"gpd.client.identity", &identity);
 	if (res != TEE_SUCCESS) {
-		OT_LOG(LOG_ERR, "TEE_GetPropertyAsIdentity: returned %#"PRIx32, res);
+		EMSG("TEE_GetPropertyAsIdentity: returned %#"PRIx32, res);
 		return PKCS11_CKR_PIN_INVALID;
 	}
 
@@ -307,7 +288,7 @@ enum pkcs11_rc verify_identity_auth(struct ck_token *token,
 /*
  * Release resources relate to persistent database
  */
-void close_persistent_db(struct ck_token *token __attribute__((unused)))
+void close_persistent_db(struct ck_token *token __unused)
 {
 }
 
@@ -346,7 +327,7 @@ enum pkcs11_rc create_object_uuid(struct ck_token *token,
 	return PKCS11_CKR_OK;
 }
 
-void destroy_object_uuid(struct ck_token *token __attribute__((unused)),
+void destroy_object_uuid(struct ck_token *token __maybe_unused,
 			 struct pkcs11_object *obj)
 {
 	assert(get_persistent_obj_idx(token, obj->uuid) < 0);
@@ -385,7 +366,7 @@ enum pkcs11_rc unregister_persistent_object(struct ck_token *token,
 
 	idx = get_persistent_obj_idx(token, uuid);
 	if (idx < 0) {
-		//printf("Cannot unregister an invalid persistent object");
+		DMSG("Cannot unregister an invalid persistent object");
 		return PKCS11_RV_NOT_FOUND;
 	}
 
@@ -402,7 +383,7 @@ enum pkcs11_rc unregister_persistent_object(struct ck_token *token,
 	res = TEE_SeekObjectData(db_hdl, sizeof(struct token_persistent_main),
 				 TEE_DATA_SEEK_SET);
 	if (res) {
-		//printf("Failed to read database");
+		DMSG("Failed to read database");
 		goto out;
 	}
 
@@ -421,7 +402,7 @@ enum pkcs11_rc unregister_persistent_object(struct ck_token *token,
 				  sizeof(struct token_persistent_objs) +
 				  ptr->count * sizeof(TEE_UUID));
 	if (res)
-		; //printf("Failed to update database");
+		DMSG("Failed to update database");
 	TEE_Free(token->db_objs);
 	token->db_objs = ptr;
 	ptr = NULL;
@@ -503,7 +484,7 @@ enum pkcs11_rc load_persistent_object_attributes(struct pkcs11_object *obj)
 					       obj->uuid, sizeof(*obj->uuid),
 					       TEE_DATA_FLAG_ACCESS_READ, &hdl);
 		if (res) {
-			OT_LOG(LOG_ERR, "OpenPersistent failed %#"PRIx32, res);
+			EMSG("OpenPersistent failed %#"PRIx32, res);
 			return tee2pkcs_error(res);
 		}
 	}
@@ -511,42 +492,36 @@ enum pkcs11_rc load_persistent_object_attributes(struct pkcs11_object *obj)
 	TEE_MemFill(&info, 0, sizeof(info));
 	res = TEE_GetObjectInfo1(hdl, &info);
 	if (res) {
-		OT_LOG(LOG_ERR, "GetObjectInfo failed %#"PRIx32, res);
+		EMSG("GetObjectInfo failed %#"PRIx32, res);
 		rc = tee2pkcs_error(res);
 		goto out;
 	}
-				OT_LOG_ERR("TXTX: 6sdd");
 
 	attr = TEE_Malloc(info.dataSize, TEE_MALLOC_FILL_ZERO);
 	if (!attr) {
 		rc = PKCS11_CKR_DEVICE_MEMORY;
 		goto out;
 	}
-				OT_LOG_ERR("TXTX: 7sdd");
 
 	res = TEE_ReadObjectData(hdl, attr, info.dataSize, &read_bytes);
 	if (!res) {
-						OT_LOG_ERR("TXTX: 7aasdd");
-
 		res = TEE_SeekObjectData(hdl, 0, TEE_DATA_SEEK_SET);
 		if (res)
-			OT_LOG(LOG_ERR, "Seek to 0 failed %#"PRIx32, res);
+			EMSG("Seek to 0 failed %#"PRIx32, res);
 	}
-				OT_LOG_ERR("TXTX: 8sdd");
 
 	if (res) {
 		rc = tee2pkcs_error(res);
-		OT_LOG(LOG_ERR, "Read %"PRIu32" bytes, failed %#"PRIx32,
+		EMSG("Read %"PRIu32" bytes, failed %#"PRIx32,
 		     read_bytes, res);
 		goto out;
 	}
 	if (read_bytes != info.dataSize) {
-		OT_LOG(LOG_ERR, "Read %"PRIu32" bytes, expected %"PRIu32,
+		EMSG("Read %"PRIu32" bytes, expected %"PRIu32,
 		     read_bytes, info.dataSize);
 		rc = PKCS11_CKR_GENERAL_ERROR;
 		goto out;
 	}
-				OT_LOG_ERR("TXTX: 9sdd");
 
 	obj->attributes = attr;
 	attr = NULL;
@@ -581,7 +556,7 @@ enum pkcs11_rc update_persistent_object_attributes(struct pkcs11_object *obj)
 				       obj->uuid, sizeof(*obj->uuid),
 				       tee_obj_flags, &hdl);
 	if (res) {
-		OT_LOG(LOG_ERR, "OpenPersistent failed %#"PRIx32, res);
+		EMSG("OpenPersistent failed %#"PRIx32, res);
 		return tee2pkcs_error(res);
 	}
 
@@ -602,7 +577,7 @@ out:
  * Return the token instance, either initialized from reset or initialized
  * from the token persistent state if found.
  */
-struct ck_token *init_persistent_db (unsigned int token_id)
+struct ck_token *init_persistent_db(unsigned int token_id)
 {
 	struct ck_token *token = get_token(token_id);
 	TEE_Result res = TEE_ERROR_GENERIC;
@@ -614,6 +589,7 @@ struct ck_token *init_persistent_db (unsigned int token_id)
 
 	if (!token)
 		return NULL;
+
 	LIST_INIT(&token->object_list);
 
 	db_main = TEE_Malloc(sizeof(*db_main), TEE_MALLOC_FILL_ZERO);
@@ -621,24 +597,24 @@ struct ck_token *init_persistent_db (unsigned int token_id)
 	if (!db_main || !db_objs)
 		goto error;
 
-	res = open_db_file(token, &db_hdl); // db_hdl becomes handler to db of the given token
+	res = open_db_file(token, &db_hdl);
 
 	if (res == TEE_SUCCESS) {
 		uint32_t size = 0;
 		size_t idx = 0;
 
-		size = sizeof(*db_main);
+		IMSG("PKCS11 token %u: load db", token_id);
 
+		size = sizeof(*db_main);
 		res = TEE_ReadObjectData(db_hdl, db_main, size, &size);
-		
 		if (res || size != sizeof(*db_main))
 			TEE_Panic(0);
+
 		size = sizeof(*db_objs);
-
-		res = TEE_ReadObjectData(db_hdl, db_objs, size, &size); 
-
+		res = TEE_ReadObjectData(db_hdl, db_objs, size, &size);
 		if (res || size != sizeof(*db_objs))
 			TEE_Panic(0);
+
 		if (db_objs->count > 0) {
 			size += db_objs->count * sizeof(TEE_UUID);
 			ptr = TEE_Realloc(db_objs, size);
@@ -647,12 +623,12 @@ struct ck_token *init_persistent_db (unsigned int token_id)
 
 			db_objs = ptr;
 			size -= sizeof(*db_objs);
-
 			res = TEE_ReadObjectData(db_hdl, db_objs->uuids, size,
 						 &size);
 			if (res || size != (db_objs->count * sizeof(TEE_UUID)))
 				TEE_Panic(0);
 		}
+
 		for (idx = 0; idx < db_objs->count; idx++) {
 			/* Create an empty object instance */
 			struct pkcs11_object *obj = NULL;
@@ -668,11 +644,14 @@ struct ck_token *init_persistent_db (unsigned int token_id)
 			obj = create_token_object(NULL, uuid, token);
 			if (!obj)
 				TEE_Panic(0);
+
 			LIST_INSERT_HEAD(&token->object_list, obj, link);
 		}
 
 	} else if (res == TEE_ERROR_ITEM_NOT_FOUND) {
 		char file[PERSISTENT_OBJECT_ID_LEN] = { };
+
+		IMSG("PKCS11 token %u: init db", token_id);
 
 		TEE_MemFill(db_main, 0, sizeof(*db_main));
 		TEE_MemFill(db_main->label, '*', sizeof(db_main->label));
@@ -698,7 +677,7 @@ struct ck_token *init_persistent_db (unsigned int token_id)
 						 db_main, sizeof(*db_main),
 						 &db_hdl);
 		if (res) {
-			OT_LOG(LOG_ERR, "Failed to create db: %#"PRIx32, res);
+			EMSG("Failed to create db: %#"PRIx32, res);
 			goto error;
 		}
 
