@@ -653,12 +653,11 @@ TEEC_Result TEEC_InitializeContext(const char *name, TEEC_Context *context)
 	strncpy(sock_addr.sun_path, known_socket_path, sizeof(sock_addr.sun_path) - 1);
 	sock_addr.sun_family = AF_UNIX;
 
-	OT_LOG(LOG_DEBUG, "********CONNECT()\n");
+	// OT_LOG(LOG_DEBUG, "********CONNECT()");
 
 	// ! Retry connect if engine is not ready yet
 
-	while (connect(ctx_internal.sockfd,
-		    (struct sockaddr *)&sock_addr, sizeof(struct sockaddr_un)) == -1) {
+	while (connect(ctx_internal.sockfd, (struct sockaddr *)&sock_addr, sizeof(struct sockaddr_un)) == -1) {
 		OT_LOG(LOG_ERR, "Failed to connect to TEE");
 		usleep(100000);
 		// ret = TEEC_ERROR_COMMUNICATION;

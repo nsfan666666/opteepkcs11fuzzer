@@ -1,27 +1,9 @@
-//// #include <cryptoki.h>
-// #include "pkcs11.h" // cryptoki API 
-// #include <stdint.h> // some basic types and macros
-// #include <stdlib.h>
-// #include <stdio.h>
-// #include <string.h>
-
-// #include <limits.h> // for PATH_MAX
-// #include <sys/types.h> // pid_t
-// #include <unistd.h> // for STDIN_FILENO, fork, clone...
-// #include <errno.h>
-// #include <fcntl.h>
-
-// #include <stdbool.h> // bool
-// #include <string.h> // memmem
-
-// #include "invoke_ta.h" // CKTEEC_SHM_INOUT, ckteec_alloc_shm
-// #include "tee_client_api.h" // TEEC_XXX, CK_XXX
-// #include "pkcs11_ta.h" // libdump
 #include <pthread.h> // PTHREAD_MUTEX_INITIALIZER
 #include <pkcs11_token.h> // pkcs11 client library help functions
 
 #include "local_utils.h" // ARRAY_SIZE
-// #include "print_functions.h" // PRI(str, ...) 
+
+
 #define PRI_FAIL(msg, ...) printf(msg "\n",__VA_ARGS__) // use printf instead of syslog
 
 #ifndef __AFL_FUZZ_TESTCASE_LEN
@@ -41,7 +23,7 @@ __AFL_COVERAGE(); // ! required for selective instrumentation feature to work
 #define INPUT_SIZE 128 // fixed size buffer based on assumption about the max size that is likely to exercise all parts of the target function
 
 
-/** ============================== xtest =============================== **/
+/** ============================== harness =============================== **/
 
 /*
  * Some PKCS#11 object resources used in the invocations
@@ -67,11 +49,11 @@ static CK_MECHANISM cktest_aes_keygen_mechanism = {
 };
 
 // Supports: sign, verify, digest, key derivation
-static const CK_ULONG cktest_general_mechanism_hmac_len = 8;
-static CK_MECHANISM cktest_hmac_general_sha256_mechanism = {
-	CKM_SHA256_HMAC_GENERAL, (CK_VOID_PTR)&cktest_general_mechanism_hmac_len,
-	sizeof(CK_ULONG),
-};
+// static const CK_ULONG cktest_general_mechanism_hmac_len = 8;
+// static CK_MECHANISM cktest_hmac_general_sha256_mechanism = {
+// 	CKM_SHA256_HMAC_GENERAL, (CK_VOID_PTR)&cktest_general_mechanism_hmac_len,
+// 	sizeof(CK_ULONG),
+// };
 
 // static const struct cktest_mac_cases[] = {
 // 	{ .attr_key = cktest_hmac_md5_key, .attr_count = ARRAY_SIZE(cktest_hmac_md5_key), .mechanism = &cktest_hmac_md5_mechanism, .in_incr = 4, .in = mac_data_md5_in1, .in_len = ARRAY_SIZE(mac_data_md5_in1), .out = mac_data_md5_out1, .out_len = ARRAY_SIZE(mac_data_md5_out1), .multiple_incr = 0, }
@@ -172,7 +154,10 @@ bail:
  * These define the genuine PINs and label to be used with the test token.
  */
 
-static CK_UTF8CHAR test_token_so_pin[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8 , 9, 10, };
+static CK_UTF8CHAR test_token_so_pin[] = { 
+	0, 1, 2, 3, 4, 5, 6, 7, 8 , 9, 10, 
+};
+
 static CK_UTF8CHAR test_token_user_pin[] = {
 	1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
 };
@@ -232,8 +217,6 @@ static CK_RV init_user_test_token(CK_SLOT_ID slot)
 
 	return rv;
 }
-
-/** ============================== harness =============================== **/
 
 /*
  * The memmem() function finds the start of the first occurrence of the
@@ -295,11 +278,6 @@ static bool split_buffer(const uint8_t *data, size_t data_sz, struct b_pair *buf
 		printf("split_buffer: could not find separator\n");
 		return false;
 	}
-
-	// if (!(buf_pair = malloc(sizeof(struct b_pair)))) {  // ! needs to be freed
-	// 	printf("split_buffer: malloc buf_1 failed\n");
-	// 	return false;
-	// }
 
 	buf_1_sz = seperator_beg - data_beg;
 	buf_2_sz = data_end - (seperator_beg + seperator_sz);
@@ -697,13 +675,90 @@ bail:
 	return rv;
 }
 
-// static CK_RV invoke_PKCS11_CMD_FIND_OBJECTS_INIT(void *data, size_t data_sz, CK_SESSION_HANDLE session) {
+static CK_RV invoke_PKCS11_CMD_FIND_OBJECTS_INIT(void *data, size_t data_sz, CK_SESSION_HANDLE session) {
+	CK_RV rv = CKR_GENERAL_ERROR;
+	TEEC_SharedMemory *ctrl = NULL;
+	uint32_t session_handle = session;
+	size_t ctrl_size = 0;
+	char *buf = NULL;
 
-// }
+	/* Shm io0: (in/out) ctrl
+	 * (in) [session-handle][headed-serialized-attributes]
+	 * (out) [status]
+	 */
+	ctrl_size = sizeof(session_handle) + data_sz;
+	ctrl = ckteec_alloc_shm(ctrl_size, CKTEEC_SHM_INOUT);
+	if (!ctrl) {
+		rv = CKR_HOST_MEMORY;
+		goto bail;
+	}
 
-// static CK_RV invoke_PKCS11_CMD_GET_ATTRIBUTE_VALUE(void *data, size_t data_sz, CK_SESSION_HANDLE session) {
+	buf = ctrl->buffer;
 
-// }
+	memcpy(buf, &session_handle, sizeof(session_handle));
+	buf += sizeof(session_handle);
+
+	memcpy(buf, data, data_sz);
+
+	rv = ckteec_invoke_ctrl(PKCS11_CMD_FIND_OBJECTS_INIT, ctrl);
+
+bail:
+	ckteec_free_shm(ctrl);
+
+	return rv;
+}
+
+static CK_RV invoke_PKCS11_CMD_GET_ATTRIBUTE_VALUE(void *data, size_t data_sz, CK_SESSION_HANDLE session, CK_OBJECT_HANDLE obj) {
+	CK_RV rv = CKR_GENERAL_ERROR;
+	CK_RV rv2 = CKR_GENERAL_ERROR;
+	TEEC_SharedMemory *ctrl = NULL;
+	TEEC_SharedMemory *out_shm = NULL;
+	size_t ctrl_size = 0;
+	uint32_t session_handle = session;
+	uint32_t obj_handle = obj;
+	char *buf = NULL;
+	size_t out_size = 0;
+
+	/* Shm io0: (in/out) [session][obj-handle][attributes] / [status] */
+	ctrl_size = sizeof(session_handle) + sizeof(obj_handle) + data_sz;
+
+	ctrl = ckteec_alloc_shm(ctrl_size, CKTEEC_SHM_INOUT);
+	if (!ctrl) {
+		rv = CKR_HOST_MEMORY;
+		goto bail;
+	}
+
+	buf = ctrl->buffer;
+
+	memcpy(buf, &session_handle, sizeof(session_handle));
+	buf += sizeof(session_handle);
+
+	memcpy(buf, &obj_handle, sizeof(obj_handle));
+	buf += sizeof(obj_handle);
+
+	memcpy(buf, data, data_sz);
+
+	/* Shm io2: (out) [attributes] */
+	out_shm = ckteec_alloc_shm(data_sz, CKTEEC_SHM_OUT);
+	if (!out_shm) {
+		rv = CKR_HOST_MEMORY;
+		goto bail;
+	}
+
+	rv = ckteec_invoke_ctrl_out(PKCS11_CMD_GET_ATTRIBUTE_VALUE,
+				    ctrl, out_shm, &out_size);
+
+	if (rv != CKR_OK) {
+		PRI_FAIL("ckteec_invoke_ctrl_out, rv=%lu", rv);
+		goto bail;
+	}
+
+bail:
+	ckteec_free_shm(out_shm);
+	ckteec_free_shm(ctrl);
+
+	return rv;
+}
 
 // static CK_RV invoke_PKCS11_CMD_COPY_OBJECT(void *data, size_t data_sz, CK_SESSION_HANDLE session) {
 
@@ -1118,13 +1173,103 @@ out:
 
 }
 
-// void harness_PKCS11_CMD_FIND_OBJECTS_INIT(void *data, size_t data_sz) {
+void harness_PKCS11_CMD_FIND_OBJECTS_INIT(void *data, size_t data_sz) {
+	// 1011
+	CK_RV rv = CKR_GENERAL_ERROR;
+	CK_SLOT_ID slot = 0;
+	CK_SESSION_HANDLE session = CK_INVALID_HANDLE;
+	CK_FLAGS session_flags = CKF_SERIAL_SESSION | CKF_RW_SESSION;
+	
+	rv = init_lib_and_find_token_slot(&slot);
+	if (rv != CKR_OK) {
+		PRI_FAIL("init_lib_and_find_token_slot, rv=%lu", rv);
+		return;
+	}
 
-// }
+	rv = init_test_token(slot);
+	if (rv != CKR_OK) {
+		PRI_FAIL("init_test_token, rv=%lu", rv);
+		goto close_lib;
+	}
 
-// void harness_PKCS11_CMD_GET_ATTRIBUTE_VALUE(void *data, size_t data_sz) {
+	rv = init_user_test_token(slot);
+	if (rv != CKR_OK) {
+		PRI_FAIL("init_user_test_token, rv=%lu", rv);
+		goto close_lib;
+	}
 
-// }
+	rv = C_OpenSession(slot, session_flags, NULL, 0, &session);
+	if (rv != CKR_OK){
+		PRI_FAIL("C_OpenSession, rv=%lu", rv);
+		goto close_lib;
+	}
+
+	rv = invoke_PKCS11_CMD_FIND_OBJECTS_INIT(data, data_sz, session);
+
+	if (rv != CKR_OK) {
+		PRI_FAIL("invoke_PKCS11_CMD_FIND_OBJECTS_INIT, rv=%lu", rv);
+		goto out;
+	}
+
+out:
+	rv = C_CloseSession(session);
+	if (rv != CKR_OK)
+		PRI_FAIL("C_CloseSession, rv=%lu", rv);
+close_lib:
+	rv = C_Finalize(0);
+	if (rv != CKR_OK)
+		PRI_FAIL("C_Finalize, rv=%lu", rv);
+}
+
+void harness_PKCS11_CMD_GET_ATTRIBUTE_VALUE(void *data, size_t data_sz) {
+	CK_RV rv = CKR_GENERAL_ERROR;
+	CK_SLOT_ID slot = 0;
+	CK_SESSION_HANDLE session = CK_INVALID_HANDLE;
+	CK_FLAGS session_flags = CKF_SERIAL_SESSION | CKF_RW_SESSION;
+	CK_OBJECT_HANDLE obj_hdl = CK_INVALID_HANDLE;
+
+	rv = init_lib_and_find_token_slot(&slot);
+	if (rv != CKR_OK) {
+		PRI_FAIL("init_lib_and_find_token_slot, rv=%lu", rv);
+		return;
+	}
+
+	rv = init_test_token(slot);
+	if (rv != CKR_OK) {
+		PRI_FAIL("init_test_token, rv=%lu", rv);
+		goto close_lib;
+	}
+
+	rv = init_user_test_token(slot);
+	if (rv != CKR_OK) {
+		PRI_FAIL("init_user_test_token, rv=%lu", rv);
+		goto close_lib;
+	}
+
+	rv = C_OpenSession(slot, session_flags, NULL, 0, &session);
+	if (rv != CKR_OK){
+		PRI_FAIL("C_OpenSession, rv=%lu", rv);
+		goto close_lib;
+	}
+
+
+
+	rv = invoke_PKCS11_CMD_GET_ATTRIBUTE_VALUE(data, data_sz, session, obj_hdl);
+
+	if (rv != CKR_OK) {
+		PRI_FAIL("invoke_PKCS11_CMD_GENERATE_KEY_PAIR, rv=%lu", rv);
+		goto out;
+	}
+
+out:
+	rv = C_CloseSession(session);
+	if (rv != CKR_OK)
+		PRI_FAIL("C_CloseSession, rv=%lu", rv);
+close_lib:
+	rv = C_Finalize(0);
+	if (rv != CKR_OK)
+		PRI_FAIL("C_Finalize, rv=%lu", rv);
+}
 
 // void harness_PKCS11_CMD_COPY_OBJECT(void *data, size_t data_sz) {
 
@@ -1264,15 +1409,15 @@ void fuzz_ta(uint8_t *afl_input, size_t afl_input_sz)
 	// 	// free(buffers.b2);
 	// 	break;
 
-	// // case PKCS11_CMD_FIND_OBJECTS_INIT:
-	// // 	printf("fuzzing PKCS11_CMD_FIND_OBJECTS_INIT\n");
-	// // 	harness_PKCS11_CMD_FIND_OBJECTS_INIT(data, data_sz);
-	// // 	break;
+	// case PKCS11_CMD_FIND_OBJECTS_INIT:
+	// 	printf("fuzzing PKCS11_CMD_FIND_OBJECTS_INIT\n");
+	// 	harness_PKCS11_CMD_FIND_OBJECTS_INIT(data, data_sz);
+	// 	break;
 
-	// // case PKCS11_CMD_GET_ATTRIBUTE_VALUE:
-	// // 	printf("fuzzing PKCS11_CMD_GET_ATTRIBUTE_VALUE\n");
-	// // 	harness_PKCS11_CMD_GET_ATTRIBUTE_VALUE(data, data_sz);
-	// // 	break;
+	// case PKCS11_CMD_GET_ATTRIBUTE_VALUE:
+	// 	printf("fuzzing PKCS11_CMD_GET_ATTRIBUTE_VALUE\n");
+	// 	harness_PKCS11_CMD_GET_ATTRIBUTE_VALUE(data, data_sz);
+	// 	break;
 
 	// // case PKCS11_CMD_COPY_OBJECT:
 	// // 	printf("fuzzing PKCS11_CMD_COPY_OBJECT\n");
@@ -1330,16 +1475,11 @@ int main(int argc, char *argv[])
 
 	uint8_t *afl_input = __AFL_FUZZ_TESTCASE_BUF; // Shm buf. MUST be after __AFL_INIT and before AFL_LOOP!
 
-// 	/* AFL loop */
+ 	/* AFL loop */
 	while(__AFL_LOOP(10000)) {
 		int afl_input_sz = __AFL_FUZZ_TESTCASE_LEN; // DONT use the macro directly in a call
 
-		printf("***************************************\n");
-
 		fuzz_ta(afl_input, afl_input_sz);
-
-		printf("***************************************\n");
-
 	} // END _AFL_LOOP
 
 	return 0;

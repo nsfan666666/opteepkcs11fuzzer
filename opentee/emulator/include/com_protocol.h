@@ -84,9 +84,6 @@
 #define TA_MAX_NAME_LEN				255
 /* clang-format on */
 
-// * used to write to AFL
-// int afl_st_fd;
-
 /*!
  * \brief The com_msg_hdr struct
  * Message header is containing generic information, which is common for all messages

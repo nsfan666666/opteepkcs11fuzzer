@@ -384,7 +384,7 @@ static void report_error_and_exit(int error) {
 
 // ! Private function used to execute the engine code 
 
-void start_engine(char *bin_name) 
+static void start_engine(char *bin_name) 
 {
 	char engine_path[PATH_MAX];
 
@@ -424,7 +424,7 @@ void start_engine(char *bin_name)
 
 // ! Spawn a new engine process
 
-void spawn_engine(s32 *ta_st_pipe_fd)
+static void spawn_engine(s32 *ta_st_pipe_fd)
 {
   const int STACK_SIZE = 65536;
   char *stack, *stack_top;
@@ -454,7 +454,7 @@ void spawn_engine(s32 *ta_st_pipe_fd)
 
 // ! Remove directory recursively
 
-int remove_directory(const char *path) {
+static int remove_directory(const char *path) {
    DIR *d = opendir(path);
    size_t path_len = strlen(path);
    int r = -1;
@@ -502,7 +502,7 @@ int remove_directory(const char *path) {
 
 // ! Retrieve the current running engine PID
 
-pid_t read_engine_pid()
+static pid_t read_engine_pid()
 {
   FILE* file = fopen ("/tmp/opentee/opentee-engine.pid", "r");
   pid_t engine_pid = 0;
@@ -517,7 +517,7 @@ pid_t read_engine_pid()
   return engine_pid;
 }
 
-void clean_pkcs11_state() 
+static void clean_pkcs11_state() 
 {
 	// ACTF("clean_pkcs11_state");
 
@@ -1483,7 +1483,6 @@ void afl_fsrv_kill(afl_forkserver_t *fsrv) {
   fsrv->child_pid = -1;
 
   unlink(TA_ST_PIPE_PATH); // *
-  sem_unlink(ENGINE_SEM); // *
 
 #ifdef __linux__
   if (fsrv->nyx_mode) {
@@ -1726,7 +1725,7 @@ if ((getenv("AFL"))) {
     
     if (fsrv->last_run_timed_out) {
       
-      ACTF("Last run timeout... Restarting engine");
+      // ACTF("Last run timeout... Restarting engine");
       spawn_engine(&fsrv->ta_st_pipe_fd);
       fsrv->engine_pid = read_engine_pid();
       

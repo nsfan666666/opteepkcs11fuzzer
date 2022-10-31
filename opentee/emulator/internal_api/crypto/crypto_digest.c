@@ -84,12 +84,10 @@ static TEE_Result do_md_init(TEE_OperationHandle operation)
 static void do_md_update(TEE_OperationHandle operation,
 			 uint8_t *chunk, size_t chunkSize)
 {
-	OT_LOG(LOG_ERR, "before mbedtls_md_update");
 	if (mbedtls_md_update((mbedtls_md_context_t *)operation->ctx.md.ctx, chunk, chunkSize)) {
-		OT_LOG(LOG_ERR, "MD Update failed, invaid data");
+		OT_LOG(LOG_ERR, "MD Update failed, invalid data");
 		TEE_Panic(TEE_ERROR_BAD_PARAMETERS);
 	}
-	OT_LOG(LOG_ERR, "after mbedtls_md_update");
 }
 
 
@@ -97,7 +95,7 @@ static void do_md_update(TEE_OperationHandle operation,
 static void do_md_final(TEE_OperationHandle operation, uint8_t *result, size_t *result_len)
 {
 	mbedtls_md_context_t *md_ctx;
-	uint8_t size; // ! from uint32_t
+	uint32_t size; 
 
 	md_ctx = (mbedtls_md_context_t *)operation->ctx.md.ctx;
 	size = mbedtls_md_get_size(md_ctx->private_md_info);
@@ -185,10 +183,9 @@ void TEE_DigestUpdate(TEE_OperationHandle operation,
 	operation->operation_info.operationState = TEE_OPERATION_STATE_ACTIVE;
 }
 
-// ! changed from TEE_Result TEE_DigestDoFinal(TEE_OperationHandle, void *, size_t , void *, size_t *)
 // ? OP-TEEs function signature doesn't follow GP 1.1.2 or 1.3.1? 
 // ? Follow Open-TEEs signature!
-// ! ### TEE_Result TEE_DigestDoFinal(TEE_OperationHandle operation, void *chunk, size_t chunkLen, void *hash, uint32_t *hashLen)
+// ! 
 TEE_Result TEE_DigestDoFinal(TEE_OperationHandle operation,
 			     void *chunk, size_t chunkLen,
 			     void *hash, size_t *hashLen)

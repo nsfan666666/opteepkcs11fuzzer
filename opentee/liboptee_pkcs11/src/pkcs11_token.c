@@ -427,8 +427,6 @@ CK_RV ck_open_session(CK_SLOT_ID slot, CK_FLAGS flags, CK_VOID_PTR cookie,
 		goto out;
 	}
 
-	printf("ck_open_session\n");
-
 	rv = ckteec_invoke_ctrl_out(PKCS11_CMD_OPEN_SESSION,
 				    ctrl, out, &out_size);
 	if (rv != CKR_OK || out_size != out->size) {
@@ -592,7 +590,6 @@ CK_RV ck_init_token(CK_SLOT_ID slot, CK_UTF8CHAR_PTR pin,
 
 	memcpy(buf, pin, pkcs11_pin_len);
 
-	//printf("Invoke!\n");
 	rv = ckteec_invoke_ctrl(PKCS11_CMD_INIT_TOKEN, ctrl);
 
 	ckteec_free_shm(ctrl);

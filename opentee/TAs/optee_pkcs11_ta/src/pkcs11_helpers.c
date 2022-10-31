@@ -650,13 +650,12 @@ bool pkcs2tee_load_attr(TEE_Attribute *tee_ref, uint32_t tee_id,
  * Initialize a TEE attribute with hash of a target PKCS11 TA attribute
  * in an object.
  */
-// ! ### enum pkcs11_rc pkcs2tee_load_hashed_attr(TEE_Attribute *tee_ref, uint32_t tee_id, struct pkcs11_object *obj, enum pkcs11_attr_id pkcs11_id, uint32_t tee_algo, void *hash_ptr, uint32_t *hash_size)
 enum pkcs11_rc pkcs2tee_load_hashed_attr(TEE_Attribute *tee_ref,
 					 uint32_t tee_id,
 					 struct pkcs11_object *obj,
 					 enum pkcs11_attr_id pkcs11_id,
 					 uint32_t tee_algo, void *hash_ptr,
-					 size_t *hash_size)
+					 uint32_t *hash_size)
 {
 	TEE_OperationHandle handle = TEE_HANDLE_NULL;
 	void *a_ptr = NULL;

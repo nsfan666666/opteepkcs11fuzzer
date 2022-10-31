@@ -16,6 +16,7 @@
 #include <tee_api_types.h>
 #include <tee_internal_api_extensions.h>
 #include <util.h>
+#include <tee_logging.h>
 
 #include "attributes.h"
 #include "handle.h"
@@ -152,6 +153,24 @@ TEE_Result pkcs11_init(void)
 {
 	unsigned int id = 0;
 	TEE_Result ret = TEE_ERROR_GENERIC;
+
+if ((getenv("BUG"))) {
+	
+	OT_LOG(LOG_DEBUG, "############### REACHED BUG ###############");
+	unsigned char invalid_read = *(unsigned char*)0x00000000;
+	unsigned int dummy = 0;
+	printf("test: %d", *((&dummy)+4));
+
+	//  // allocating memory to p
+	// int* p = malloc(8);
+	// *p = 100;    
+	// // deallocated the space allocated to p
+	// free(p);
+	// // core dump/segmentation fault
+	// //  as now this statement is illegal
+	// *p = 110;
+	
+}
 
 	for (id = 0; id < TOKEN_COUNT; id++) {
 		ret = pkcs11_token_init(id);

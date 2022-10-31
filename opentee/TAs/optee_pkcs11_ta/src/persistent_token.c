@@ -77,7 +77,7 @@ static enum pkcs11_rc do_hash(uint32_t user, const uint8_t *pin,
 {
 	TEE_Result res = TEE_SUCCESS;
 	TEE_OperationHandle oh = TEE_HANDLE_NULL;
-	size_t sz = TEE_MAX_HASH_SIZE; // ! ### uint32_t sz = TEE_MAX_HASH_SIZE;
+	uint32_t sz = TEE_MAX_HASH_SIZE; 
 
 	res = TEE_AllocateOperation(&oh, TEE_ALG_SHA256, TEE_MODE_DIGEST, 0);
 	if (res)

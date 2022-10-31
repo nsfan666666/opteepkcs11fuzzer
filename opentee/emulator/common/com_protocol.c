@@ -28,16 +28,13 @@
 
 #include <stdio.h> // for perror message when using strerror(errno)
 
+#include "com_protocol.h"
+#include "tee_logging.h"
+
 struct control_fd {
 	struct cmsghdr header;
 	int fd[4];
 };
-
-
-#include "com_protocol.h"
-#include "tee_logging.h"
-
-#include <fcntl.h> // * O_WRONLY
 
 static const uint32_t COM_MSG_START = 0xABCDEF12;
 #define TRY_READ_FD_COUNT 5

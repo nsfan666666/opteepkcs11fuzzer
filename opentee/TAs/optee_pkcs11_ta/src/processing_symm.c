@@ -274,7 +274,7 @@ static enum pkcs11_rc hash_secret_helper(enum pkcs11_mechanism_id mech_id,
 {
 	uint32_t algo = 0;
 	void *hash_ptr = NULL;
-	size_t hash_size = 0; // ! ### uint32_t hash_size = 0; 
+	uint32_t hash_size = 0; 
 	enum pkcs11_rc rc = PKCS11_CKR_OK;
 
 	rc = hmac_to_tee_hash(&algo, mech_id);

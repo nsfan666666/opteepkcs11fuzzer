@@ -1,6 +1,6 @@
 # optee_pkcs11_ta
 
-export AFL_USE_ASAN=1
+#export AFL_USE_ASAN=1
 CC=afl-gcc-fast
 
 ta_LTLIBRARIES += liboptee_pkcs11_ta.la
@@ -60,7 +60,9 @@ liboptee_pkcs11_ta_la_CFLAGS = ${AM_CFLAGS} \
 	-DCFG_PKCS11_TA_ALLOW_DIGEST_KEY=y \
 	-fno-stack-protector \
 	-fno-omit-frame-pointer -fno-common \
-	--coverage
+	--coverage \
+	-fsanitize=address
 	
 
-liboptee_pkcs11_ta_la_LDFLAGS = ${AM_LDFLAGS} 
+liboptee_pkcs11_ta_la_LDFLAGS = ${AM_LDFLAGS} \
+	-fsanitize=address

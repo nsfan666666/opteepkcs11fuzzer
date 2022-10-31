@@ -156,7 +156,7 @@ void TEE_DigestUpdate(TEE_OperationHandle operation, void *chunk, size_t chunkSi
  * \param hashLen
  * \return
  */
-// ! ### TEE_Result TEE_DigestDoFinal(TEE_OperationHandle operation, void *chunk, size_t chunkLen, void *hash, uint32_t *hashLen);
+// !  
 TEE_Result TEE_DigestDoFinal(TEE_OperationHandle operation,
 			     void *chunk, size_t chunkLen,
 			     void *hash, size_t *hashLen);

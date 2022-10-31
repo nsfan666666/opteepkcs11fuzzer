@@ -444,7 +444,7 @@ enum pkcs11_rc step_asymm_operation(struct pkcs11_session *session,
 	uint32_t in_size = 0;
 	uint32_t in2_size = 0;
 	uint32_t out_size = 0;
-	size_t hash_size = 0; // ! ### uint32_t hash_size = 0; 
+	uint32_t hash_size = 0; 
 	TEE_Attribute *tee_attrs = NULL;
 	size_t tee_attrs_count = 0;
 	bool output_data = false;

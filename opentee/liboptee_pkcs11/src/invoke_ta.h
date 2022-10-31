@@ -69,7 +69,6 @@ CK_RV ckteec_invoke_ta(unsigned long cmd, TEEC_SharedMemory *ctrl,
 static inline CK_RV ckteec_invoke_ctrl(unsigned long cmd,
 				       TEEC_SharedMemory *ctrl)
 {
-	// printf("ckteec_invoke_ctrl\n");
 	return ckteec_invoke_ta(cmd, ctrl, NULL, NULL, NULL, NULL, NULL);
 }
 
@@ -77,7 +76,6 @@ static inline CK_RV ckteec_invoke_ctrl_in(unsigned long cmd,
 					  TEEC_SharedMemory *ctrl,
 					  TEEC_SharedMemory *io1)
 {
-	// printf("ckteec_invoke_ctrl_in\n");
 	return ckteec_invoke_ta(cmd, ctrl, io1, NULL, NULL, NULL, NULL);
 }
 
@@ -86,7 +84,6 @@ static inline CK_RV ckteec_invoke_ctrl_out(unsigned long cmd,
 					   TEEC_SharedMemory *io2,
 					   size_t *out_sz)
 {
-	// printf("ckteec_invoke_ctrl_out\n");
 	return ckteec_invoke_ta(cmd, ctrl, NULL, io2, out_sz, NULL, NULL);
 }
 

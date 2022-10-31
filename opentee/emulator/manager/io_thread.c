@@ -75,7 +75,7 @@ static void proc_fd_err(int err_nro, proc_t proc)
 	/* Placeholder */
 
 	if (!proc) {
-		OT_LOG(LOG_DEBUG, "Proc NULL");
+		// OT_LOG(LOG_DEBUG, "Proc NULL");
 		return;
 	}
 
@@ -92,7 +92,7 @@ static void proc_fd_err(int err_nro, proc_t proc)
 static int check_proc_fd_epoll_status(struct epoll_event *event)
 {
 	if (!(proc_t)event->data.ptr) {
-		OT_LOG(LOG_DEBUG, "Event data ptr NULL");
+		// OT_LOG(LOG_DEBUG, "Event data ptr NULL");
 		return 1;
 	}
 
@@ -290,7 +290,7 @@ void handle_public_fd(struct epoll_event *event)
 	if (check_event_fd_epoll_status(event))
 		return; /* err msg logged */
 
-	OT_LOG(LOG_DEBUG, "********ACCEPT()\n");
+	// OT_LOG(LOG_DEBUG, "********ACCEPT()");
 
 	/* Socket has received a connection attempt */
 	accept_fd = accept(event->data.fd, NULL, NULL);
@@ -455,7 +455,7 @@ void manager_check_signal(struct core_control *control_params, struct epoll_even
 
 	if (cpy_sig_vec & (TEE_SIG_TERM | TEE_SIG_INT )) {
 
-		OT_LOG(LOG_DEBUG, "[Manager] received |^ TEE_SIG_TERM | TEE_SIG_INT ^|, proceeding to termination...");
+		// OT_LOG(LOG_DEBUG, "[Manager] received |^ TEE_SIG_TERM | TEE_SIG_INT ^|, proceeding to termination...");
 
 		/* Possible defect: If we can not signal to logic thread about SIGCHLD,
 		 * process is not reapet. It might get reapet when TA proc causes FD event */

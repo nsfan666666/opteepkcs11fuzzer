@@ -180,7 +180,7 @@ typedef enum {
 #define TEE_MAC_SIZE_AES_CMAC
 #define TEE_MAC_SIZE_DES_CBC_MAC_PKCS5
 
-static inline size_t __tee_alg_get_digest_size(size_t algo) // ! ### static inline size_t __tee_alg_get_digest_size(uint32_t algo)
+static inline size_t __tee_alg_get_digest_size(uint32_t algo) 
 {
 	switch (algo) {
 	case TEE_ALG_MD5:

@@ -4,15 +4,16 @@
 
 Serialized invocations in pkcs11_processing.c
 =============================================
-	GP API								libcktee help functions		PKCS#11 command ID
--------------------------------------------------------------------------------------------------------------------
-[x] C_CreateObject						ck_create_object			PKCS11_CMD_CREATE_OBJECT
+	GP API								libcktee help functions		PKCS#11 command ID								    Notes
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+[x] C_CreateObject						ck_create_object			PKCS11_CMD_CREATE_OBJECT							
 [\] C_EncryptInit/C_DecryptInit			ck_encdecrypt_init			PKCS11_CMD_DECRYPT_INIT PKCS11_CMD_ENCRYPT_INIT
 [x] C_DigestInit						ck_digest_init				PKCS11_CMD_DIGEST_INIT
 [ ] C_SignInit/C_VerifyInit				ck_signverify_init			PKCS11_CMD_SIGN_INIT PKCS11_CMD_VERIFY_INIT
 [x] C_GenerateKey						ck_generate_key				PKCS11_CMD_GENERATE_KEY
-[ ] C_FindObjectsInit					ck_find_objects_init		PKCS11_CMD_FIND_OBJECTS_INIT
-[ ] C_GetAttributeValue					ck_get_attribute_value		PKCS11_CMD_GET_ATTRIBUTE_VALUE
+[x] C_FindObjectsInit					ck_find_objects_init		PKCS11_CMD_FIND_OBJECTS_INIT
+[x] C_GetAttributeValue					ck_get_attribute_value		PKCS11_CMD_GET_ATTRIBUTE_VALUE						Difficulty passing 
+																														check_access_attrs_against_token
 [ ] C_CopyObject						ck_copy_object				PKCS11_CMD_COPY_OBJECT
 [ ] C_DeriveKey							ck_derive_key				PKCS11_CMD_DERIVE_KEY
 [x] C_GenerateKeyPair					ck_generate_key_pair		PKCS11_CMD_GENERATE_KEY_PAIR

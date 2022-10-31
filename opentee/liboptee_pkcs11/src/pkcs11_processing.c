@@ -686,7 +686,7 @@ CK_RV ck_signverify_init(CK_SESSION_HANDLE session,
 	memcpy(buf, obj.buffer, obj.size);
 
 #ifdef ENABLE_CORPUS
-	create_corpus_entry(obj.buffer, obj.size, sign ? PKCS11_CMD_SIGN_INIT : PKCS11_CMD_VERIFY_INIT);
+	// create_corpus_entry(obj.buffer, obj.size, sign ? PKCS11_CMD_SIGN_INIT : PKCS11_CMD_VERIFY_INIT);
 #endif
 	rv = ckteec_invoke_ctrl(sign ? PKCS11_CMD_SIGN_INIT :
 				PKCS11_CMD_VERIFY_INIT, ctrl);
@@ -1202,7 +1202,7 @@ CK_RV ck_get_attribute_value(CK_SESSION_HANDLE session,
 	}
 
 #ifdef ENABLE_CORPUS
-	// create_corpus_entry(sattr.buffer, sattr.size, PKCS11_CMD_GET_ATTRIBUTE_VALUE);
+	create_corpus_entry(sattr.buffer, sattr.size, PKCS11_CMD_GET_ATTRIBUTE_VALUE);
 #endif
 	rv = ckteec_invoke_ctrl_out(PKCS11_CMD_GET_ATTRIBUTE_VALUE,
 				    ctrl, out_shm, &out_size);

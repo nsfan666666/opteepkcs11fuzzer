@@ -1339,17 +1339,17 @@ void *ta_internal_thread(void *arg)
 		switch (com_msg_name) {
 
 		case COM_MSG_NAME_OPEN_SESSION:
-			OT_LOG(LOG_DEBUG, "[ta_internal_thread] received |^ COM_MSG_NAME_OPEN_SESSION ^|");
+			// OT_LOG(LOG_DEBUG, "[ta_internal_thread] received |^ COM_MSG_NAME_OPEN_SESSION ^|");
 			open_session(task);
 			break;
 
 		case COM_MSG_NAME_INVOKE_CMD:
-			OT_LOG(LOG_DEBUG, "[ta_internal_thread] |^ received COM_MSG_NAME_INVOKE_CMD ^|");
+			// OT_LOG(LOG_DEBUG, "[ta_internal_thread] |^ received COM_MSG_NAME_INVOKE_CMD ^|");
 			invoke_cmd(task);
 			break;
 
 		case COM_MSG_NAME_CLOSE_SESSION:
-			OT_LOG(LOG_DEBUG, "[ta_internal_thread] received |^ COM_MSG_NAME_CLOSE_SESSION ^|");
+			// OT_LOG(LOG_DEBUG, "[ta_internal_thread] received |^ COM_MSG_NAME_CLOSE_SESSION ^|");
 			
 #ifdef GRACEFUL_TERMINATION
 			if (close_session(task))

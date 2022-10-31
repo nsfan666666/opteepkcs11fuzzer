@@ -1,5 +1,23 @@
 # Usage Guide for Debian GNU/Linux 10 (buster)
 
+## General Information
+
+The project is based on:
+* AFL++ - version ++4.03a (dev)
+* Open-TEE newest release as of 2022 (missing project version?)
+* OP-TEE - version 3.18.0 (2022-07-15)
+* mbedtls 3.1.0
+
+The project has been tested on Debian GNU/Linux 10 (Buster) 64-bit
+
+## Project Hierarchy Information
+
+Harness  &emsp;&emsp;&emsp;&rarr;&emsp; opentee/tests/pkcs11/ &emsp; *(pkcs11_test_app.c)*
+
+XTest &emsp;&emsp;&emsp;&emsp;&rarr;&emsp; opentee/tests/pkcs11/
+
+PKCS#11 TA &emsp;&rarr;&emsp; opentee/TAs/optee_pkcs11_ta/
+
 ## Build Instructions
 
 ### Prepare for Build
@@ -71,8 +89,10 @@ In order to test run the PKCS#11 TA with a specific input (corpus_entry), use th
 
 ```bash
 LD_PRELOAD=$(gcc -print-file-name=libasan.so) /opt/OpenTee/bin/opentee-engine -f 
-
+# run harness
 cat <corpus_entries>/<corpus_entry> | /opt/OpenTee/bin/pkcs11_test 
+# run xtest
+/opt/OpenTee/bin/xtest -t pkcs11 pkcs11_<test_case> 
 ```
 
 ### Fuzz PKCS#11 TA using AFL
@@ -132,4 +152,3 @@ service rsyslog stop
 # Debug the TA using GDB
 sudo -E gdb -ex "set follow-fork-mode child" opentee-engine $(pidof tee_launcher)
 ```
-
