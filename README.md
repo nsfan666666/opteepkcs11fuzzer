@@ -2,6 +2,8 @@
 
 ## General Information
 
+Thesis Paper: [Fuzzing of PKCS#11 Trusted Application](https://lup.lub.lu.se/student-papers/search/publication/9112597)
+
 The project is based on:
 * AFL++ - version ++4.03a (dev)
 * Open-TEE newest release as of 2022 (missing project version?)
